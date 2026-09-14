@@ -1,0 +1,6 @@
+invalid binary integer literal
+binary integer literal may not be followed by e or E
+invalid octal integer literal
+invalid hexadecimal integer literal
+non-decimal integer literal may not be followed by a period
+floating-point exponent has no digits

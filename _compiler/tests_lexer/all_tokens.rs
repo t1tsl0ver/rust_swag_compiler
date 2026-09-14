@@ -25,7 +25,7 @@ macro_rules raw safe union 'static
 bool char str i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 String
 
 // Identifiers, raw identifiers, lifetimes and loop labels.
-answer snake_case _unused r#match 'a 'loop_label 'r#async
+answer snake_case _unused Москва 東京 r#match 'a 'loop_label 'r#async
 
 // Literals.
 0 123 123_u32 0b1111_0000 0o77 0xff_u8
@@ -36,6 +36,10 @@ answer snake_case _unused r#match 'a 'loop_label 'r#async
 b'R' b'\xA0' b"bytes\x20string"
 c"C string" c"UTF-8: \u{00E6}"
 r"raw" r#"raw "quoted" string"# br##"raw bytes"## cr#"raw C string"#
+
+// Arbitrary suffixes are part of literal tokens; later stages decide whether
+// a suffix makes sense for a particular expression.
+123custom 1.0custom 'R'custom "text"custom b'R'custom b"bytes"custom
 
 // Every punctuation token from the lexical grammar.
 ... ..= <<= >>= != %= && &= *= += -= -> .. /= :: <- << <= == => >= >> ^= |= ||

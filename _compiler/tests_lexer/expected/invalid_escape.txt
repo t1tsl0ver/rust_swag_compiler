@@ -1,0 +1,3 @@
+ERROR
+unknown string escape
+unknown character
