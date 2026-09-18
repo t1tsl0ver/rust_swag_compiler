@@ -10,15 +10,16 @@
 /*! Inner block documentation. */
 /** Outer block documentation. */
 
-// Strict keywords from the Rust 2024 reference.
+// Strict keywords.
 _ as async await break const continue crate dyn else enum extern false fn for
 if impl in let loop match mod move mut pub ref return self Self static struct
 super trait true type unsafe use where while
 
-// Reserved keywords.
+// Reserved keywords. `gen` is intentionally an ID in the laboratory profile,
+// because its reservation is specific to Edition 2024.
 abstract become box do final gen macro override priv try typeof unsized virtual yield
 
-// Weak keywords.
+// Context-dependent words remain identifiers; the parser will interpret them.
 macro_rules raw safe union 'static
 
 // Primitive type names plus the commonly used standard-library String type.
@@ -41,6 +42,7 @@ r"raw" r#"raw "quoted" string"# br##"raw bytes"## cr#"raw C string"#
 // a suffix makes sense for a particular expression.
 123custom 1.0custom 'R'custom "text"custom b'R'custom b"bytes"custom
 
-// Every punctuation token from the lexical grammar.
+// Punctuation. Removed spellings `...` and `<-` intentionally split into
+// ordinary punctuation tokens.
 ... ..= <<= >>= != %= && &= *= += -= -> .. /= :: <- << <= == => >= >> ^= |= ||
 ! # $ % & ( ) * + , - . / : ; < = > ? @ [ ] ^ { | } ~

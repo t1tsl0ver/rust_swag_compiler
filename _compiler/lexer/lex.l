@@ -12,6 +12,7 @@
 
 %{
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -25,20 +26,19 @@
  * Что уже реализовано:
  *   1. BOM, shebang и все виды пробельных символов из Rust Reference.
  *   2. Обычные, документационные и вложенные блочные комментарии.
- *   3. Обычные, byte-, C- и raw-строки, escape-последовательности и суффиксы.
+ *   3. Обычные, byte-, C- и raw-строки с вычислением их значений.
  *   4. Символьные и byte-литералы.
  *   5. Идентификаторы, raw-идентификаторы, lifetime и raw-lifetime.
- *   6. Все strict/reserved/weak keywords Rust 2024 и имена основных типов.
+ *   6. Strict/reserved keywords отдельными правилами; контекстные слова — ID.
  *   7. Целые числа 2/8/10/16 систем, числа с плавающей точкой и суффиксы.
  *   8. Полный набор знаков пунктуации из лексической грамматики Rust.
- *   9. Зарезервированные в Edition 2024 guards, prefixes и raw-имена.
- *  10. Координаты начала токена и ненулевой код возврата при ошибках.
+ *   9. Координаты начала токена и ненулевой код возврата при ошибках.
  *
  * Что намеренно оставлено на следующие этапы:
  *   - точные Unicode 17 XID_Start/XID_Continue и NFC-нормализация;
  *   - проверка допустимости суффикса в конкретном выражении (задача парсера);
  *   - превращение doc-комментариев в атрибуты;
- *   - передача enum-токенов и semantic values в будущий Bison-парсер.
+ *   - передача токенов и уже вычисленных semantic values в будущий парсер.
  *
  * Сейчас это самостоятельный диагностический сканер: emitToken() печатает
  * найденные токены. При подключении Bison именно вызовы emitToken() будут
@@ -55,8 +55,10 @@ static bool hadErrors = false;
 static const char* sourceName = "<input>";
 
 static std::string accumulatedText;
+static std::string accumulatedValue;
 static std::string accumulatedError;
 static const char* accumulatedKind = nullptr;
+static bool accumulatedHasSemanticValue = false;
 static int accumulatedLine = 1;
 static int accumulatedColumn = 1;
 
@@ -71,30 +73,22 @@ enum class StringFlavor {
     Raw,
     RawByte,
     RawC,
-    ReservedGuarded,
 };
 
 static StringFlavor stringFlavor = StringFlavor::Normal;
 
 /*
- * Сдвигает текущую позицию на заданный фрагмент исходника.
- * Колонки считаются по Unicode code point: continuation bytes UTF-8 отдельно
- * колонку не увеличивают. CRLF считается одним переводом строки.
+ * Простая система координат: перевод строки увеличивает номер строки,
+ * остальные байты увеличивают колонку. Для лабораторного лексера этого
+ * достаточно, а точные Unicode-координаты сможет добавить диагностика позже.
  */
 static void advancePosition(const char* text, int length)
 {
     for (int i = 0; i < length; ++i) {
-        const unsigned char character = static_cast<unsigned char>(text[i]);
-
-        if (character == '\r' && i + 1 < length && text[i + 1] == '\n') {
+        if (text[i] == '\n') {
             ++currentLine;
             currentColumn = 1;
-            ++i;
-        } else if (character == '\n' || character == '\r') {
-            ++currentLine;
-            currentColumn = 1;
-        } else if ((character & 0xC0U) != 0x80U) {
-            /* UTF-8 continuation bytes do not occupy a separate column. */
+        } else {
             ++currentColumn;
         }
     }
@@ -150,6 +144,19 @@ static void emitToken(const char* kind, std::string_view text, int line, int col
     std::printf("%d:%d  %-32s ", line, column, kind);
     printEscaped(stdout, text);
     std::fputc('\n', stdout);
+}
+
+/* Числовые semantic values печатаются числами, без строковых кавычек. */
+static void emitUnsignedValue(const char* kind, unsigned long long value,
+                              int line, int column)
+{
+    std::printf("%d:%d  %-32s %llu\n", line, column, kind, value);
+}
+
+static void emitFloatValue(const char* kind, double value,
+                           int line, int column)
+{
+    std::printf("%d:%d  %-32s %.17g\n", line, column, kind, value);
 }
 
 /* Печатает текущее совпадение yytext с координатами, сохранёнными Flex. */
@@ -212,12 +219,15 @@ static int countOpeningHashes(std::string_view text)
  * строку, raw-строку, блочный комментарий или незавершённый byte-символ.
  */
 static void beginAccumulated(const char* kind, StringFlavor flavor,
-                             const char* text, int length)
+                             const char* text, int length,
+                             bool hasSemanticValue = false)
 {
     accumulatedKind = kind;
     stringFlavor = flavor;
     accumulatedText.assign(text, static_cast<std::size_t>(length));
+    accumulatedValue.clear();
     accumulatedError.clear();
+    accumulatedHasSemanticValue = hasSemanticValue;
     accumulatedLine = matchLine;
     accumulatedColumn = matchColumn;
 }
@@ -251,29 +261,27 @@ static void validateStringContent(std::string_view text)
 }
 
 /*
- * Завершает составную лексему: печатает корректный тип либо один ERROR.
- * Зарезервированная guarded string имеет собственный тип, но также делает
- * общий результат лексического анализа неуспешным.
+ * Завершает составную лексему: печатает исходный текст комментария либо
+ * вычисленное значение строкового литерала.
  */
 static void finishAccumulated()
 {
-    if (stringFlavor == StringFlavor::ReservedGuarded) {
-        emitToken("RESERVED_GUARDED_STRING", accumulatedText,
-                  accumulatedLine, accumulatedColumn);
-        reportError("guarded string syntax is reserved in Rust 2024",
-                    accumulatedText, accumulatedLine, accumulatedColumn);
-    } else if (!accumulatedError.empty()) {
+    if (!accumulatedError.empty()) {
         emitToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
         reportError(accumulatedError, accumulatedText,
                     accumulatedLine, accumulatedColumn);
     } else {
-        emitToken(accumulatedKind, accumulatedText,
+        emitToken(accumulatedKind,
+                  accumulatedHasSemanticValue ? std::string_view(accumulatedValue)
+                                              : std::string_view(accumulatedText),
                   accumulatedLine, accumulatedColumn);
     }
 
     accumulatedText.clear();
+    accumulatedValue.clear();
     accumulatedError.clear();
     accumulatedKind = nullptr;
+    accumulatedHasSemanticValue = false;
 }
 
 /* ASCII-проверка одной шестнадцатеричной цифры. */
@@ -300,6 +308,112 @@ static unsigned int parseHexIgnoringUnderscores(std::string_view text)
         }
     }
     return value;
+}
+
+/* Кодирует Unicode scalar value в UTF-8 для semantic value литерала. */
+static void appendUtf8(std::string& output, unsigned int value)
+{
+    if (value <= 0x7FU) {
+        output.push_back(static_cast<char>(value));
+    } else if (value <= 0x7FFU) {
+        output.push_back(static_cast<char>(0xC0U | (value >> 6U)));
+        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
+    } else if (value <= 0xFFFFU) {
+        output.push_back(static_cast<char>(0xE0U | (value >> 12U)));
+        output.push_back(static_cast<char>(0x80U | ((value >> 6U) & 0x3FU)));
+        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
+    } else {
+        output.push_back(static_cast<char>(0xF0U | (value >> 18U)));
+        output.push_back(static_cast<char>(0x80U | ((value >> 12U) & 0x3FU)));
+        output.push_back(static_cast<char>(0x80U | ((value >> 6U) & 0x3FU)));
+        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
+    }
+}
+
+/* Преобразует одну проверенную служебную последовательность в её значение. */
+static bool decodeEscape(std::string_view escape, std::string& output)
+{
+    if (escape.size() == 2) {
+        switch (escape[1]) {
+        case 'n': output.push_back('\n'); return true;
+        case 'r': output.push_back('\r'); return true;
+        case 't': output.push_back('\t'); return true;
+        case '0': output.push_back('\0'); return true;
+        case '\\': output.push_back('\\'); return true;
+        case '\'': output.push_back('\''); return true;
+        case '"': output.push_back('"'); return true;
+        default: return false;
+        }
+    }
+
+    if (escape.size() == 4 && escape[1] == 'x') {
+        output.push_back(static_cast<char>(parseHexIgnoringUnderscores(escape.substr(2))));
+        return true;
+    }
+
+    if (escape.size() >= 5 && escape.substr(0, 3) == "\\u{" &&
+        escape.back() == '}') {
+        const unsigned int value = parseHexIgnoringUnderscores(
+            escape.substr(3, escape.size() - 4));
+        if (value > 0x10FFFFU || (value >= 0xD800U && value <= 0xDFFFU)) {
+            return false;
+        }
+        appendUtf8(output, value);
+        return true;
+    }
+
+    return false;
+}
+
+static std::string withoutUnderscores(std::string_view text)
+{
+    std::string result;
+    result.reserve(text.size());
+    for (const char character : text) {
+        if (character != '_') {
+            result.push_back(character);
+        }
+    }
+    return result;
+}
+
+/* Вычисляет semantic value целого литерала с учётом системы счисления. */
+static void emitIntegerLiteral(const char* kind, int base, int prefixLength)
+{
+    const std::string_view source(yytext, static_cast<std::size_t>(yyleng));
+    const std::string normalized = withoutUnderscores(source);
+    const char* digits = normalized.c_str() + prefixLength;
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long long value = std::strtoull(digits, &end, base);
+
+    if (end == digits || errno == ERANGE) {
+        emitToken("ERROR", source, matchLine, matchColumn);
+        reportError("integer literal is outside the supported range",
+                    source, matchLine, matchColumn);
+        return;
+    }
+
+    emitUnsignedValue(kind, value, matchLine, matchColumn);
+}
+
+/* Вычисляет semantic value вещественного литерала. */
+static void emitFloatingLiteral()
+{
+    const std::string_view source(yytext, static_cast<std::size_t>(yyleng));
+    const std::string normalized = withoutUnderscores(source);
+    char* end = nullptr;
+    errno = 0;
+    const double value = std::strtod(normalized.c_str(), &end);
+
+    if (end == normalized.c_str() || errno == ERANGE) {
+        emitToken("ERROR", source, matchLine, matchColumn);
+        reportError("floating-point literal is outside the supported range",
+                    source, matchLine, matchColumn);
+        return;
+    }
+
+    emitFloatValue("FLOAT_LITERAL", value, matchLine, matchColumn);
 }
 
 /* Проверяет ограничения escape вида \xNN для выбранного вида строки. */
@@ -430,101 +544,56 @@ static std::string validateCharacterLiteral(std::string_view literal, bool isByt
     return {};
 }
 
+static std::string characterLiteralValue(std::string_view literal, bool isByte)
+{
+    const std::size_t contentStart = isByte ? 2U : 1U;
+    std::size_t closingQuote = contentStart;
+    bool escaped = false;
+    for (; closingQuote < literal.size(); ++closingQuote) {
+        if (!escaped && literal[closingQuote] == '\'') {
+            break;
+        }
+        if (!escaped && literal[closingQuote] == '\\') {
+            escaped = true;
+        } else {
+            escaped = false;
+        }
+    }
+
+    const std::string_view content =
+        literal.substr(contentStart, closingQuote - contentStart);
+    std::string value;
+    if (content.front() == '\\') {
+        decodeEscape(content, value);
+    } else {
+        value.assign(content);
+    }
+    return value;
+}
+
 /* Выводит проверенный CHAR_LITERAL/BYTE_LITERAL либо ERROR. */
 static void emitCharacterLiteral(const char* kind, bool isByte)
 {
     const std::string_view text(yytext, static_cast<std::size_t>(yyleng));
     const std::string error = validateCharacterLiteral(text, isByte);
     if (error.empty()) {
-        emitToken(kind, text, matchLine, matchColumn);
+        const std::string value = characterLiteralValue(text, isByte);
+        if (isByte) {
+            emitUnsignedValue(kind, static_cast<unsigned char>(value.front()),
+                              matchLine, matchColumn);
+        } else {
+            emitToken(kind, value, matchLine, matchColumn);
+        }
     } else {
         emitToken("ERROR", text, matchLine, matchColumn);
         reportError(error, text, matchLine, matchColumn);
     }
 }
 
-/*
- * Превращает текст идентификатора в диагностический тип.
- * Обычные имена возвращают IDENTIFIER; специальные таблицы идут ниже зонами.
- */
-static const char* identifierKind(std::string_view identifier)
-{
-    struct Keyword {
-        std::string_view spelling;
-        const char* kind;
-    };
-
-    static constexpr Keyword keywords[] = {
-        /* Зона 1: строгие ключевые слова — обычными именами быть не могут. */
-        {"_", "KW_UNDERSCORE"}, {"as", "KW_AS"},
-        {"async", "KW_ASYNC"}, {"await", "KW_AWAIT"},
-        {"break", "KW_BREAK"}, {"const", "KW_CONST"},
-        {"continue", "KW_CONTINUE"}, {"crate", "KW_CRATE"},
-        {"dyn", "KW_DYN"}, {"else", "KW_ELSE"},
-        {"enum", "KW_ENUM"}, {"extern", "KW_EXTERN"},
-        {"false", "KW_FALSE"}, {"fn", "KW_FN"},
-        {"for", "KW_FOR"}, {"if", "KW_IF"},
-        {"impl", "KW_IMPL"}, {"in", "KW_IN"},
-        {"let", "KW_LET"}, {"loop", "KW_LOOP"},
-        {"match", "KW_MATCH"}, {"mod", "KW_MOD"},
-        {"move", "KW_MOVE"}, {"mut", "KW_MUT"},
-        {"pub", "KW_PUB"}, {"ref", "KW_REF"},
-        {"return", "KW_RETURN"}, {"self", "KW_SELF_VALUE"},
-        {"Self", "KW_SELF_TYPE"}, {"static", "KW_STATIC"},
-        {"struct", "KW_STRUCT"}, {"super", "KW_SUPER"},
-        {"trait", "KW_TRAIT"}, {"true", "KW_TRUE"},
-        {"type", "KW_TYPE"}, {"unsafe", "KW_UNSAFE"},
-        {"use", "KW_USE"}, {"where", "KW_WHERE"},
-        {"while", "KW_WHILE"},
-
-        /* Зона 2: слова зарезервированы Rust для будущих возможностей языка. */
-        {"abstract", "RESERVED_KW_ABSTRACT"},
-        {"become", "RESERVED_KW_BECOME"},
-        {"box", "RESERVED_KW_BOX"}, {"do", "RESERVED_KW_DO"},
-        {"final", "RESERVED_KW_FINAL"}, {"gen", "RESERVED_KW_GEN"},
-        {"macro", "RESERVED_KW_MACRO"},
-        {"override", "RESERVED_KW_OVERRIDE"},
-        {"priv", "RESERVED_KW_PRIV"}, {"try", "RESERVED_KW_TRY"},
-        {"typeof", "RESERVED_KW_TYPEOF"},
-        {"unsized", "RESERVED_KW_UNSIZED"},
-        {"virtual", "RESERVED_KW_VIRTUAL"},
-        {"yield", "RESERVED_KW_YIELD"},
-
-        /* Зона 3: слабые ключевые слова — особый смысл зависит от контекста. */
-        {"macro_rules", "WEAK_KW_MACRO_RULES"},
-        {"raw", "WEAK_KW_RAW"}, {"safe", "WEAK_KW_SAFE"},
-        {"union", "WEAK_KW_UNION"},
-
-        /*
-         * Зона 4: имена типов.
-         * Rust лексически считает их идентификаторами, но для учебного вывода
-         * отдельный TYPE_* сразу показывает, какой тип встретился. Будущий
-         * парсер должен сохранить их контекстную обработку как идентификаторов.
-         */
-        {"bool", "TYPE_BOOL"}, {"char", "TYPE_CHAR"},
-        {"str", "TYPE_STR"}, {"String", "TYPE_STRING"},
-        {"i8", "TYPE_I8"}, {"i16", "TYPE_I16"},
-        {"i32", "TYPE_I32"}, {"i64", "TYPE_I64"},
-        {"i128", "TYPE_I128"}, {"isize", "TYPE_ISIZE"},
-        {"u8", "TYPE_U8"}, {"u16", "TYPE_U16"},
-        {"u32", "TYPE_U32"}, {"u64", "TYPE_U64"},
-        {"u128", "TYPE_U128"}, {"usize", "TYPE_USIZE"},
-        {"f32", "TYPE_F32"}, {"f64", "TYPE_F64"},
-    };
-
-    for (const Keyword& keyword : keywords) {
-        if (identifier == keyword.spelling) {
-            return keyword.kind;
-        }
-    }
-    return "IDENTIFIER";
-}
-
-/* Выводит ключевое слово, имя типа либо обычный IDENTIFIER. */
+/* Все неключевые слова, включая имена типов, остаются идентификаторами. */
 static void emitIdentifier()
 {
-    const std::string_view text(yytext, static_cast<std::size_t>(yyleng));
-    emitToken(identifierKind(text), text, matchLine, matchColumn);
+    emitCurrentToken("ID");
 }
 
 /*
@@ -598,7 +667,67 @@ PATTERN_WS      ([ \t\v\f\r\n]|\xC2\x85|\xE2\x80[\x8E\x8F\xA8\xA9])
 {PATTERN_WS}+                    { /* Пробелы только разделяют токены. */ }
 
     /* ================================================================== */
-    /* ЗОНА B. Однострочные комментарии и line doc comments               */
+    /* ЗОНА B. Ключевые слова                                             */
+    /* Каждое слово — отдельное Flex-правило, как требует лабораторная.   */
+    /* Имена типов и weak keywords намеренно сюда не входят: это ID.      */
+    /* ================================================================== */
+
+"_"                               { emitCurrentToken("UNDERSCORE"); }
+"as"                              { emitCurrentToken("AS"); }
+"async"                           { emitCurrentToken("ASYNC"); }
+"await"                           { emitCurrentToken("AWAIT"); }
+"break"                           { emitCurrentToken("BREAK"); }
+"const"                           { emitCurrentToken("CONST"); }
+"continue"                        { emitCurrentToken("CONTINUE"); }
+"crate"                           { emitCurrentToken("CRATE"); }
+"dyn"                             { emitCurrentToken("DYN"); }
+"else"                            { emitCurrentToken("ELSE"); }
+"enum"                            { emitCurrentToken("ENUM"); }
+"extern"                          { emitCurrentToken("EXTERN"); }
+"false"                           { emitCurrentToken("FALSE"); }
+"fn"                              { emitCurrentToken("FN"); }
+"for"                             { emitCurrentToken("FOR"); }
+"if"                              { emitCurrentToken("IF"); }
+"impl"                            { emitCurrentToken("IMPL"); }
+"in"                              { emitCurrentToken("IN"); }
+"let"                             { emitCurrentToken("LET"); }
+"loop"                            { emitCurrentToken("LOOP"); }
+"match"                           { emitCurrentToken("MATCH"); }
+"mod"                             { emitCurrentToken("MOD"); }
+"move"                            { emitCurrentToken("MOVE"); }
+"mut"                             { emitCurrentToken("MUT"); }
+"pub"                             { emitCurrentToken("PUB"); }
+"ref"                             { emitCurrentToken("REF"); }
+"return"                          { emitCurrentToken("RETURN"); }
+"self"                            { emitCurrentToken("SELF_VALUE"); }
+"Self"                            { emitCurrentToken("SELF_TYPE"); }
+"static"                          { emitCurrentToken("STATIC"); }
+"struct"                          { emitCurrentToken("STRUCT"); }
+"super"                           { emitCurrentToken("SUPER"); }
+"trait"                           { emitCurrentToken("TRAIT"); }
+"true"                            { emitCurrentToken("TRUE"); }
+"type"                            { emitCurrentToken("TYPE"); }
+"unsafe"                          { emitCurrentToken("UNSAFE"); }
+"use"                             { emitCurrentToken("USE"); }
+"where"                           { emitCurrentToken("WHERE"); }
+"while"                           { emitCurrentToken("WHILE"); }
+
+"abstract"                        { emitCurrentToken("ABSTRACT"); }
+"become"                          { emitCurrentToken("BECOME"); }
+"box"                             { emitCurrentToken("BOX"); }
+"do"                              { emitCurrentToken("DO"); }
+"final"                           { emitCurrentToken("FINAL"); }
+"macro"                           { emitCurrentToken("MACRO"); }
+"override"                        { emitCurrentToken("OVERRIDE"); }
+"priv"                            { emitCurrentToken("PRIV"); }
+"try"                             { emitCurrentToken("TRY"); }
+"typeof"                          { emitCurrentToken("TYPEOF"); }
+"unsized"                         { emitCurrentToken("UNSIZED"); }
+"virtual"                         { emitCurrentToken("VIRTUAL"); }
+"yield"                           { emitCurrentToken("YIELD"); }
+
+    /* ================================================================== */
+    /* ЗОНА C. Однострочные комментарии и line doc comments               */
     /* ================================================================== */
 
 "//!"[^\r\n]*                 { emitCurrentToken("INNER_LINE_DOC_COMMENT"); }
@@ -606,7 +735,7 @@ PATTERN_WS      ([ \t\v\f\r\n]|\xC2\x85|\xE2\x80[\x8E\x8F\xA8\xA9])
 "//"[^\r\n]*                  { emitCurrentToken("LINE_COMMENT"); }
 
     /* ================================================================== */
-    /* ЗОНА C. Вложенные блочные и block doc comments                     */
+    /* ЗОНА D. Вложенные блочные и block doc comments                     */
     /* BLOCK_COMMENT — exclusive state до выравнивания вложенности.       */
     /* ================================================================== */
 
@@ -648,13 +777,13 @@ PATTERN_WS      ([ \t\v\f\r\n]|\xC2\x85|\xE2\x80[\x8E\x8F\xA8\xA9])
                                   }
 
     /* ================================================================== */
-    /* ЗОНА D. Открывающие части raw-, raw byte- и raw C-строк            */
+    /* ЗОНА E. Открывающие части raw-, raw byte- и raw C-строк            */
     /* Число # сохраняется и сравнивается с закрывающим разделителем.     */
     /* ================================================================== */
 
 br[#]*\"                         {
                                       beginAccumulated("RAW_BYTE_STRING_LITERAL",
-                                                       StringFlavor::RawByte, yytext, yyleng);
+                                                       StringFlavor::RawByte, yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
@@ -663,7 +792,7 @@ br[#]*\"                         {
                                   }
 cr[#]*\"                         {
                                       beginAccumulated("RAW_C_STRING_LITERAL",
-                                                       StringFlavor::RawC, yytext, yyleng);
+                                                       StringFlavor::RawC, yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
@@ -672,7 +801,7 @@ cr[#]*\"                         {
                                   }
 r[#]*\"                          {
                                       beginAccumulated("RAW_STRING_LITERAL",
-                                                       StringFlavor::Raw, yytext, yyleng);
+                                                       StringFlavor::Raw, yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
@@ -681,54 +810,59 @@ r[#]*\"                          {
                                   }
 
     /* ================================================================== */
-    /* ЗОНА E. Обычные String / Byte string / C string / guarded string   */
+    /* ЗОНА F. Обычные String / Byte string / C string                    */
     /* ================================================================== */
 
 b\"                               {
                                       beginAccumulated("BYTE_STRING_LITERAL",
-                                                       StringFlavor::Byte, yytext, yyleng);
+                                                       StringFlavor::Byte, yytext, yyleng, true);
                                       BEGIN(STRING);
                                   }
 c\"                               {
                                       beginAccumulated("C_STRING_LITERAL",
-                                                       StringFlavor::C, yytext, yyleng);
+                                                       StringFlavor::C, yytext, yyleng, true);
                                       BEGIN(STRING);
                                   }
 \"                                {
                                       beginAccumulated("STRING_LITERAL",
-                                                       StringFlavor::Normal, yytext, yyleng);
-                                      BEGIN(STRING);
-                                  }
-[#]+\"                            {
-                                      beginAccumulated("RESERVED_GUARDED_STRING",
-                                                       StringFlavor::ReservedGuarded,
-                                                       yytext, yyleng);
+                                                       StringFlavor::Normal, yytext, yyleng, true);
                                       BEGIN(STRING);
                                   }
 
     /* ================================================================== */
-    /* ЗОНА F. Содержимое обычных строк и escape-последовательности        */
+    /* ЗОНА G. Содержимое обычных строк и escape-последовательности        */
     /* STRING завершается только кавычкой; ошибка сохраняется до конца.   */
     /* ================================================================== */
 
 <STRING>[^\"\\\r]+             {
                                       appendAccumulated(yytext, yyleng);
+                                      accumulatedValue.append(yytext,
+                                          static_cast<std::size_t>(yyleng));
                                       validateStringContent(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
                                   }
 <STRING>\\[nrt0\\\'\"]        {
                                       appendAccumulated(yytext, yyleng);
+                                      decodeEscape(
+                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)),
+                                          accumulatedValue);
                                       if (stringFlavor == StringFlavor::C && yytext[1] == '0') {
                                           markAccumulatedError("a C string may not contain a null byte");
                                       }
                                   }
 <STRING>\\x[0-9a-fA-F]{2}       {
                                       appendAccumulated(yytext, yyleng);
+                                      decodeEscape(
+                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)),
+                                          accumulatedValue);
                                       validateHexEscape(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
                                   }
 <STRING>{UNICODE_ESCAPE}           {
                                       appendAccumulated(yytext, yyleng);
+                                      decodeEscape(
+                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)),
+                                          accumulatedValue);
                                       validateUnicodeEscape(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
                                   }
@@ -759,17 +893,21 @@ c\"                               {
                                   }
 
     /* ================================================================== */
-    /* ЗОНА G. Содержимое raw-строк                                       */
+    /* ЗОНА H. Содержимое raw-строк                                       */
     /* В raw-строках backslash ничего не экранирует.                      */
     /* ================================================================== */
 
 <RAW_STRING>[^\"\r]+             {
                                       appendAccumulated(yytext, yyleng);
+                                      accumulatedValue.append(yytext,
+                                          static_cast<std::size_t>(yyleng));
                                       validateStringContent(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
                                   }
 <RAW_STRING>\r                     {
                                       appendAccumulated(yytext, yyleng);
+                                      accumulatedValue.append(yytext,
+                                          static_cast<std::size_t>(yyleng));
                                       markAccumulatedError("carriage return is not allowed in a raw string literal");
                                   }
 <RAW_STRING>\"[#]*{SUFFIX}?       {
@@ -781,6 +919,8 @@ c\"                               {
 
                                       if (closingHashes < rawHashCount) {
                                           appendAccumulated(yytext, yyleng);
+                                          accumulatedValue.append(yytext,
+                                              static_cast<std::size_t>(yyleng));
                                       } else {
                                           int usedLength = yyleng;
                                           if (closingHashes > rawHashCount) {
@@ -802,7 +942,7 @@ c\"                               {
                                   }
 
     /* ================================================================== */
-    /* ЗОНА H. Character и byte character literals                       */
+    /* ЗОНА I. Character и byte character literals                       */
     /* Закрытые литералы берёт CHAR_UNIT; BYTE_CHAR ловит незавершённые.  */
     /* ================================================================== */
 
@@ -823,8 +963,11 @@ b\'                                {
                                       const std::string error =
                                           validateCharacterLiteral(accumulatedText, true);
                                       if (error.empty()) {
-                                          emitToken("BYTE_LITERAL", accumulatedText,
-                                                    accumulatedLine, accumulatedColumn);
+                                          const std::string value =
+                                              characterLiteralValue(accumulatedText, true);
+                                          emitUnsignedValue("BYTE_LITERAL",
+                                              static_cast<unsigned char>(value.front()),
+                                              accumulatedLine, accumulatedColumn);
                                       } else {
                                           emitToken("ERROR", accumulatedText,
                                                     accumulatedLine, accumulatedColumn);
@@ -886,9 +1029,9 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 ({BIN_NUMBER}|{OCT_NUMBER}|{HEX_NUMBER})/\.[0-9] {
                                       emitCurrentError("non-decimal integer literal may not be followed by a period");
                                   }
-{BIN_NUMBER}{SUFFIX}?             { emitCurrentToken("INTEGER_LITERAL_BIN"); }
-{OCT_NUMBER}{SUFFIX}?             { emitCurrentToken("INTEGER_LITERAL_OCT"); }
-{HEX_NUMBER}{SUFFIX}?             { emitCurrentToken("INTEGER_LITERAL_HEX"); }
+{BIN_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_BIN", 2, 2); }
+{OCT_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_OCT", 8, 2); }
+{HEX_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_HEX", 16, 2); }
 0b{ID_CONT}*                      { emitCurrentError("invalid binary integer literal"); }
 0o{ID_CONT}*                      { emitCurrentError("invalid octal integer literal"); }
 0x{ID_CONT}*                      { emitCurrentError("invalid hexadecimal integer literal"); }
@@ -899,19 +1042,20 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
     /* ================================================================== */
 
 {DEC_NUMBER}(\.{DEC_NUMBER})?{EXPONENT}{SUFFIX}? {
-                                      emitCurrentToken("FLOAT_LITERAL");
+                                      emitFloatingLiteral();
                                   }
 {DEC_NUMBER}(\.{DEC_NUMBER})?[eE][+-]?{ID_CONT}* {
                                       emitCurrentError("floating-point exponent has no digits");
                                   }
-{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { emitCurrentToken("FLOAT_LITERAL"); }
-{DEC_NUMBER}/\.\.               { emitCurrentToken("INTEGER_LITERAL_DEC"); }
-{DEC_NUMBER}/\.{ID_START}        { emitCurrentToken("INTEGER_LITERAL_DEC"); }
-{DEC_NUMBER}\.                   { emitCurrentToken("FLOAT_LITERAL"); }
-{DEC_NUMBER}{SUFFIX}?             { emitCurrentToken("INTEGER_LITERAL_DEC"); }
+{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { emitFloatingLiteral(); }
+{DEC_NUMBER}/\.\.               { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
+{DEC_NUMBER}/\.{ID_START}        { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
+{DEC_NUMBER}\.                   { emitFloatingLiteral(); }
+{DEC_NUMBER}(f32|f64)             { emitFloatingLiteral(); }
+{DEC_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
 
     /* ================================================================== */
-    /* ЗОНА M. Reserved prefixes и обычные идентификаторы                 */
+    /* ЗОНА N. Reserved prefixes и обычные идентификаторы                 */
     /* Пример ошибки: custom"text" или custom#attribute.                 */
     /* ================================================================== */
 
@@ -930,11 +1074,10 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 {IDENTIFIER}                      { emitIdentifier(); }
 
     /* ================================================================== */
-    /* ЗОНА N. Составная пунктуация и операторы (проверяется первой)       */
+    /* ЗОНА O. Составная пунктуация и операторы (проверяется первой)       */
     /* Flex выбирает самое длинное совпадение: >>= раньше, чем >> и >.     */
     /* ================================================================== */
 
-"..."                             { emitCurrentToken("DOT_DOT_DOT"); }
 "..="                             { emitCurrentToken("RANGE_INCLUSIVE"); }
 "<<="                             { emitCurrentToken("SHIFT_LEFT_ASSIGN"); }
 ">>="                             { emitCurrentToken("SHIFT_RIGHT_ASSIGN"); }
@@ -949,7 +1092,6 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 ".."                              { emitCurrentToken("RANGE"); }
 "/="                              { emitCurrentToken("DIVIDE_ASSIGN"); }
 "::"                              { emitCurrentToken("PATH_SEPARATOR"); }
-"<-"                              { emitCurrentToken("LEFT_ARROW"); }
 "<<"                              { emitCurrentToken("SHIFT_LEFT"); }
 "<="                              { emitCurrentToken("LESS_EQUAL"); }
 "=="                              { emitCurrentToken("EQUAL_EQUAL"); }
@@ -961,7 +1103,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "||"                              { emitCurrentToken("LOGICAL_OR"); }
 
     /* ================================================================== */
-    /* ЗОНА O. Односимвольная пунктуация, операторы и delimiters           */
+    /* ЗОНА P. Односимвольная пунктуация, операторы и delimiters           */
     /* ================================================================== */
 
 "!"                               { emitCurrentToken("BANG"); }
@@ -993,16 +1135,8 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "~"                               { emitCurrentToken("TILDE"); }
 
     /* ================================================================== */
-    /* ЗОНА P. Зарезервированные #, неизвестные символы и конец файла      */
+    /* ЗОНА Q. Неизвестные символы и конец файла                           */
     /* ================================================================== */
-
-[#][#]+                           {
-                                      emitCurrentToken("RESERVED_POUNDS");
-                                      reportError("two or more consecutive # characters are reserved in Rust 2024",
-                                                  std::string_view(yytext,
-                                                      static_cast<std::size_t>(yyleng)),
-                                                  matchLine, matchColumn);
-                                  }
 
 \'                                { emitCurrentError("unexpected single quote"); }
 .                                 { emitCurrentError("unknown character"); }
