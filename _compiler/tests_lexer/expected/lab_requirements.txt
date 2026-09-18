@@ -1,0 +1,25 @@
+ID                               "i32"
+INTEGER_LITERAL_HEX              42
+ID                               "f64"
+FLOAT_LITERAL                    15.5
+STRING_LITERAL                   "ABC\n"
+CHAR_LITERAL                     "D"
+BYTE_LITERAL                     69
+ID                               "gen"
+ID                               "safe"
+ID                               "union"
+ID                               "macro_rules"
+ID                               "raw"
+RANGE                            ".."
+DOT                              "."
+LESS                             "<"
+MINUS                            "-"
+POUND                            "#"
+STRING_LITERAL                   "guarded"
+!TYPE_
+!WEAK_KW_
+!RESERVED_KW_GEN
+!DOT_DOT_DOT
+!LEFT_ARROW
+!RESERVED_GUARDED_STRING
+!RESERVED_POUNDS

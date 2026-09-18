@@ -27,6 +27,19 @@ foreach(fragment IN LISTS required_fragments)
         continue()
     endif()
 
+    if(fragment MATCHES "^!")
+        string(SUBSTRING "${fragment}" 1 -1 forbidden_fragment)
+        string(FIND "${complete_output}" "${forbidden_fragment}" fragment_position)
+        if(NOT fragment_position EQUAL -1)
+            message(FATAL_ERROR
+                "Lexer output for ${INPUT} contains forbidden fragment:\n${forbidden_fragment}\n"
+                "stdout:\n${lexer_stdout}\n"
+                "stderr:\n${lexer_stderr}"
+            )
+        endif()
+        continue()
+    endif()
+
     string(FIND "${complete_output}" "${fragment}" fragment_position)
     if(fragment_position EQUAL -1)
         message(FATAL_ERROR

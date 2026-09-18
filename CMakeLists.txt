@@ -56,6 +56,7 @@ if(BUILD_TESTING)
     endfunction()
 
     add_lexer_test(all_tokens all_tokens.rs 0 all_tokens.txt)
+    add_lexer_test(lab_requirements lab_requirements.rs 0 lab_requirements.txt)
     add_lexer_test(full_valid_program full_valid_program.rs 0 full_valid_program.txt)
     add_lexer_test(positions positions.rs 0 positions.txt)
     add_lexer_test(invalid_escape invalid_escape.rs 2 invalid_escape.txt)
