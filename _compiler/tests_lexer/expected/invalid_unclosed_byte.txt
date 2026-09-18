@@ -1,0 +1,2 @@
+1:1  ERROR
+byte literal is not closed

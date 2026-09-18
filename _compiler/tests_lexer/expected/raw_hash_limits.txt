@@ -1,0 +1,4 @@
+1:1  RAW_STRING_LITERAL
+2:1  ERROR
+raw strings may use at most 255 # characters
+2:523  EOF

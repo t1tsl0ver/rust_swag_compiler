@@ -1,0 +1,26 @@
+1:1  ERROR
+2:1  ERROR
+3:1  ERROR
+4:1  ERROR
+5:1  ERROR
+6:1  ERROR
+7:1  ERROR
+8:1  ERROR
+9:1  ERROR
+10:1  ERROR
+11:1  ERROR
+12:1  ERROR
+13:1  ERROR
+14:1  ERROR
+15:1  ERROR
+16:1  ERROR
+17:1  ERROR
+invalid binary integer literal
+invalid octal integer literal
+invalid hexadecimal integer literal
+binary integer literal may not be followed by e or E
+octal integer literal may not be followed by e or E
+integer literal is outside the supported range
+floating-point literal is outside the supported range
+floating-point exponent has no digits
+18:1  ERROR

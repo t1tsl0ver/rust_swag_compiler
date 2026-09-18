@@ -1,0 +1,22 @@
+1:1  ERROR
+1:2  ERROR
+2:4  ERROR
+3:1  ERROR
+4:1  ERROR
+5:1  ERROR
+6:1  ERROR
+7:1  ERROR
+8:1  ERROR
+9:1  ERROR
+10:1  ERROR
+unexpected single quote
+a character \x escape must be in the ASCII range
+unknown character escape
+a tab must be escaped in a character literal
+character literal is empty
+a character literal must contain exactly one ASCII character
+a character literal may contain only an ASCII character
+byte literal is not closed
+11:1  LET
+12:1  ERROR
+unknown character

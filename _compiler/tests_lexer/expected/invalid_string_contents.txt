@@ -1,0 +1,14 @@
+1:1  ERROR
+2:1  ERROR
+3:1  ERROR
+4:1  ERROR
+5:1  ERROR
+6:1  ERROR
+7:1  ERROR
+8:1  ERROR
+9:1  ERROR
+a string \x escape must be in the ASCII range
+unknown string escape
+a string literal may contain only ASCII characters
+a C string may not contain a null byte
+10:1  ERROR
