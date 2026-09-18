@@ -19,33 +19,7 @@
 #include <string>
 #include <string_view>
 
-/*
- * ЛЕКСЕР RUST-ПОДОБНОГО ЯЗЫКА: КАРТА ФАЙЛА
- * =========================================
- *
- * Что уже реализовано:
- *   1. BOM, shebang и все виды пробельных символов из Rust Reference.
- *   2. Обычные, документационные и вложенные блочные комментарии.
- *   3. Обычные, byte-, C- и raw-строки с вычислением их значений.
- *   4. Символьные и byte-литералы.
- *   5. Идентификаторы, raw-идентификаторы, lifetime и raw-lifetime.
- *   6. Strict/reserved keywords отдельными правилами; контекстные слова — ID.
- *   7. Целые числа 2/8/10/16 систем, числа с плавающей точкой и суффиксы.
- *   8. Полный набор знаков пунктуации из лексической грамматики Rust.
- *   9. Координаты начала токена и ненулевой код возврата при ошибках.
- *
- * Что намеренно оставлено на следующие этапы:
- *   - точные Unicode 17 XID_Start/XID_Continue и NFC-нормализация;
- *   - проверка допустимости суффикса в конкретном выражении (задача парсера);
- *   - превращение doc-комментариев в атрибуты;
- *   - передача токенов и уже вычисленных semantic values в будущий парсер.
- *
- * Сейчас это самостоятельный диагностический сканер: emitToken() печатает
- * найденные токены. При подключении Bison именно вызовы emitToken() будут
- * заменены/дополнены возвратом TOKEN и заполнением semantic value.
- */
-
-/* ---------------- Состояние позиции и текущей составной лексемы --------- */
+/* Состояние позиции и текущей составной лексемы */
 
 static int currentLine = 1;
 static int currentColumn = 1;
@@ -78,9 +52,7 @@ enum class StringFlavor {
 static StringFlavor stringFlavor = StringFlavor::Normal;
 
 /*
- * Простая система координат: перевод строки увеличивает номер строки,
- * остальные байты увеличивают колонку. Для лабораторного лексера этого
- * достаточно, а точные Unicode-координаты сможет добавить диагностика позже.
+ * Простая система координат: перевод строки увеличивает номер строки, остальные байты увеличивают колонку.
  */
 static void advancePosition(const char* text, int length)
 {
@@ -102,12 +74,11 @@ static void beginMatch(const char* text, int length)
     advancePosition(text, length);
 }
 
-/* YY_USER_ACTION runs before every Flex action. */
+/* Макрос нужный для того что бы выдавать найденный токен и передвигать позицию Flex уже после токена. */
 #define YY_USER_ACTION do { beginMatch(yytext, yyleng); } while (0);
 
 /*
- * Исправляет позицию после yyless(), когда Flex возвращает хвост совпадения
- * обратно во входной поток (используется для shebang и raw-строк).
+ * Исправляет позицию после yyless(), когда Flex возвращает хвост совпадения обратно во входной поток при разборе raw-строк.
  */
 static void keepMatchedPrefix(const char* text, int length)
 {
@@ -130,7 +101,8 @@ static void printEscaped(FILE* stream, std::string_view text)
         default:
             if (character < 0x20U || character == 0x7FU) {
                 std::fprintf(stream, "\\x%02X", static_cast<unsigned int>(character));
-            } else {
+            }
+            else {
                 std::fputc(character, stream);
             }
         }
@@ -147,14 +119,12 @@ static void emitToken(const char* kind, std::string_view text, int line, int col
 }
 
 /* Числовые semantic values печатаются числами, без строковых кавычек. */
-static void emitUnsignedValue(const char* kind, unsigned long long value,
-                              int line, int column)
+static void emitUnsignedValue(const char* kind, unsigned long long value, int line, int column)
 {
     std::printf("%d:%d  %-32s %llu\n", line, column, kind, value);
 }
 
-static void emitFloatValue(const char* kind, double value,
-                           int line, int column)
+static void emitFloatValue(const char* kind, double value, int line, int column)
 {
     std::printf("%d:%d  %-32s %.17g\n", line, column, kind, value);
 }
@@ -162,17 +132,14 @@ static void emitFloatValue(const char* kind, double value,
 /* Печатает текущее совпадение yytext с координатами, сохранёнными Flex. */
 static void emitCurrentToken(const char* kind)
 {
-    emitToken(kind, std::string_view(yytext, static_cast<std::size_t>(yyleng)),
-              matchLine, matchColumn);
+    emitToken(kind, std::string_view(yytext, static_cast<std::size_t>(yyleng)), matchLine, matchColumn);
 }
 
 /* Регистрирует ошибку, чтобы main вернул код 2, и выводит её в stderr. */
-static void reportError(std::string_view message, std::string_view text,
-                        int line, int column)
+static void reportError(std::string_view message, std::string_view text, int line, int column)
 {
     hadErrors = true;
-    std::fprintf(stderr, "%s:%d:%d: lexer error: %.*s: ", sourceName, line,
-                 column, static_cast<int>(message.size()), message.data());
+    std::fprintf(stderr, "%s:%d:%d: lexer error: %.*s: ", sourceName, line, column, static_cast<int>(message.size()), message.data());
     printEscaped(stderr, text);
     std::fputc('\n', stderr);
 }
@@ -185,7 +152,7 @@ static void emitCurrentError(std::string_view message)
     reportError(message, text, matchLine, matchColumn);
 }
 
-/* Проверяет, присутствуют ли во фрагменте байты вне ASCII (0x00..0x7F). */
+/* Проверяет, присутствуют ли во фрагменте байты вне ASCII. */
 static bool containsNonAscii(std::string_view text)
 {
     for (const unsigned char character : text) {
@@ -215,12 +182,9 @@ static int countOpeningHashes(std::string_view text)
 }
 
 /*
- * Начинает накапливать лексему, которую нельзя получить одним regex-правилом:
- * строку, raw-строку, блочный комментарий или незавершённый byte-символ.
+ * Начинает накапливать лексему, которую нельзя получить одним regex-правилом (строку, raw-строку, блочный комментарий или незавершённый byte-символ).
  */
-static void beginAccumulated(const char* kind, StringFlavor flavor,
-                             const char* text, int length,
-                             bool hasSemanticValue = false)
+static void beginAccumulated(const char* kind, StringFlavor flavor, const char* text, int length, bool hasSemanticValue = false)
 {
     accumulatedKind = kind;
     stringFlavor = flavor;
@@ -246,35 +210,31 @@ static void markAccumulatedError(std::string_view message)
     }
 }
 
-/* Проверяет ограничения тела byte- и C-строк. */
+/* Проверяет ограничения тела ASCII и C-строк. */
 static void validateStringContent(std::string_view text)
 {
-    if ((stringFlavor == StringFlavor::Byte ||
-         stringFlavor == StringFlavor::RawByte) && containsNonAscii(text)) {
-        markAccumulatedError("a byte string may contain only ASCII characters");
+    if (containsNonAscii(text)) {
+        markAccumulatedError("a string literal may contain only ASCII characters");
     }
 
-    if ((stringFlavor == StringFlavor::C ||
-         stringFlavor == StringFlavor::RawC) && containsNul(text)) {
+    if ((stringFlavor == StringFlavor::C || stringFlavor == StringFlavor::RawC) && containsNul(text)) {
         markAccumulatedError("a C string may not contain a null byte");
     }
 }
 
 /*
- * Завершает составную лексему: печатает исходный текст комментария либо
- * вычисленное значение строкового литерала.
+ * Завершает составную лексему: печатает исходный текст комментария либо вычисленное значение строкового литерала.
  */
 static void finishAccumulated()
 {
     if (!accumulatedError.empty()) {
         emitToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
-        reportError(accumulatedError, accumulatedText,
-                    accumulatedLine, accumulatedColumn);
-    } else {
+        reportError(accumulatedError, accumulatedText, accumulatedLine, accumulatedColumn);
+    }
+    else {
         emitToken(accumulatedKind,
-                  accumulatedHasSemanticValue ? std::string_view(accumulatedValue)
-                                              : std::string_view(accumulatedText),
-                  accumulatedLine, accumulatedColumn);
+        accumulatedHasSemanticValue ? std::string_view(accumulatedValue) : std::string_view(accumulatedText),
+        accumulatedLine, accumulatedColumn);
     }
 
     accumulatedText.clear();
@@ -291,43 +251,22 @@ static bool isHexDigit(char character)
 }
 
 /* Переводит hex-последовательность в число, пропуская разделители `_`. */
-static unsigned int parseHexIgnoringUnderscores(std::string_view text)
+static unsigned int parseHex(std::string_view text)
 {
     unsigned int value = 0;
     for (const char character : text) {
-        if (character == '_') {
-            continue;
-        }
         value *= 16U;
         if (character >= '0' && character <= '9') {
             value += static_cast<unsigned int>(character - '0');
-        } else if (character >= 'a' && character <= 'f') {
+        }
+        else if (character >= 'a' && character <= 'f') {
             value += 10U + static_cast<unsigned int>(character - 'a');
-        } else {
+        }
+        else {
             value += 10U + static_cast<unsigned int>(character - 'A');
         }
     }
     return value;
-}
-
-/* Кодирует Unicode scalar value в UTF-8 для semantic value литерала. */
-static void appendUtf8(std::string& output, unsigned int value)
-{
-    if (value <= 0x7FU) {
-        output.push_back(static_cast<char>(value));
-    } else if (value <= 0x7FFU) {
-        output.push_back(static_cast<char>(0xC0U | (value >> 6U)));
-        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
-    } else if (value <= 0xFFFFU) {
-        output.push_back(static_cast<char>(0xE0U | (value >> 12U)));
-        output.push_back(static_cast<char>(0x80U | ((value >> 6U) & 0x3FU)));
-        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
-    } else {
-        output.push_back(static_cast<char>(0xF0U | (value >> 18U)));
-        output.push_back(static_cast<char>(0x80U | ((value >> 12U) & 0x3FU)));
-        output.push_back(static_cast<char>(0x80U | ((value >> 6U) & 0x3FU)));
-        output.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
-    }
 }
 
 /* Преобразует одну проверенную служебную последовательность в её значение. */
@@ -335,30 +274,19 @@ static bool decodeEscape(std::string_view escape, std::string& output)
 {
     if (escape.size() == 2) {
         switch (escape[1]) {
-        case 'n': output.push_back('\n'); return true;
-        case 'r': output.push_back('\r'); return true;
-        case 't': output.push_back('\t'); return true;
-        case '0': output.push_back('\0'); return true;
-        case '\\': output.push_back('\\'); return true;
-        case '\'': output.push_back('\''); return true;
-        case '"': output.push_back('"'); return true;
-        default: return false;
+            case 'n': output.push_back('\n'); return true;
+            case 'r': output.push_back('\r'); return true;
+            case 't': output.push_back('\t'); return true;
+            case '0': output.push_back('\0'); return true;
+            case '\\': output.push_back('\\'); return true;
+            case '\'': output.push_back('\''); return true;
+            case '"': output.push_back('"'); return true;
+            default: return false;
         }
     }
 
     if (escape.size() == 4 && escape[1] == 'x') {
-        output.push_back(static_cast<char>(parseHexIgnoringUnderscores(escape.substr(2))));
-        return true;
-    }
-
-    if (escape.size() >= 5 && escape.substr(0, 3) == "\\u{" &&
-        escape.back() == '}') {
-        const unsigned int value = parseHexIgnoringUnderscores(
-            escape.substr(3, escape.size() - 4));
-        if (value > 0x10FFFFU || (value >= 0xD800U && value <= 0xDFFFU)) {
-            return false;
-        }
-        appendUtf8(output, value);
+        output.push_back(static_cast<char>(parseHex(escape.substr(2))));
         return true;
     }
 
@@ -389,8 +317,7 @@ static void emitIntegerLiteral(const char* kind, int base, int prefixLength)
 
     if (end == digits || errno == ERANGE) {
         emitToken("ERROR", source, matchLine, matchColumn);
-        reportError("integer literal is outside the supported range",
-                    source, matchLine, matchColumn);
+        reportError("integer literal is outside the supported range", source, matchLine, matchColumn);
         return;
     }
 
@@ -408,8 +335,7 @@ static void emitFloatingLiteral()
 
     if (end == normalized.c_str() || errno == ERANGE) {
         emitToken("ERROR", source, matchLine, matchColumn);
-        reportError("floating-point literal is outside the supported range",
-                    source, matchLine, matchColumn);
+        reportError("floating-point literal is outside the supported range", source, matchLine, matchColumn);
         return;
     }
 
@@ -419,48 +345,19 @@ static void emitFloatingLiteral()
 /* Проверяет ограничения escape вида \xNN для выбранного вида строки. */
 static void validateHexEscape(std::string_view escape)
 {
-    const unsigned int value = parseHexIgnoringUnderscores(escape.substr(2));
+    const unsigned int value = parseHex(escape.substr(2));
 
     if (stringFlavor == StringFlavor::Normal && value > 0x7FU) {
         markAccumulatedError("a string \\x escape must be in the ASCII range");
-    } else if (stringFlavor == StringFlavor::C && value == 0U) {
+    }
+    else if (stringFlavor == StringFlavor::C && value == 0U) {
         markAccumulatedError("a C string may not contain a null byte");
     }
-}
-
-/* Проверяет escape вида \u{...}: число цифр проверяет regex, здесь — значение. */
-static void validateUnicodeEscape(std::string_view escape)
-{
-    if (stringFlavor == StringFlavor::Byte) {
-        markAccumulatedError("Unicode escapes are not allowed in byte strings");
-        return;
-    }
-
-    const std::size_t openBrace = escape.find('{');
-    const std::size_t closeBrace = escape.rfind('}');
-    const unsigned int value = parseHexIgnoringUnderscores(
-        escape.substr(openBrace + 1, closeBrace - openBrace - 1));
-
-    if (value > 0x10FFFFU || (value >= 0xD800U && value <= 0xDFFFU)) {
-        markAccumulatedError("Unicode escape is not a valid scalar value");
-    } else if (stringFlavor == StringFlavor::C && value == 0U) {
-        markAccumulatedError("a C string may not contain a null byte");
-    }
-}
-
-/* Возвращает длину одного UTF-8 code point по его первому байту. */
-static std::size_t utf8CharacterLength(unsigned char firstByte)
-{
-    if (firstByte < 0x80U) return 1;
-    if ((firstByte & 0xE0U) == 0xC0U) return 2;
-    if ((firstByte & 0xF0U) == 0xE0U) return 3;
-    if ((firstByte & 0xF8U) == 0xF0U) return 4;
-    return 0;
 }
 
 /*
- * Проверяет содержимое символьного/byte-литерала: ровно один символ или один
- * допустимый escape. Суффикс после закрывающей кавычки здесь не анализируется.
+ * Проверяет содержимое символьного/byte-литерала (ровно один символ или один допустимый escape).
+ * Суффикс после закрывающей кавычки здесь не анализируется.
  */
 static std::string validateCharacterLiteral(std::string_view literal, bool isByte)
 {
@@ -468,14 +365,15 @@ static std::string validateCharacterLiteral(std::string_view literal, bool isByt
     std::size_t closingQuote = contentStart;
     bool escaped = false;
 
-    for (; closingQuote < literal.size(); ++closingQuote) {
+    for ( ; closingQuote < literal.size(); ++closingQuote) {
         const char character = literal[closingQuote];
         if (!escaped && character == '\'') {
             break;
         }
         if (!escaped && character == '\\') {
             escaped = true;
-        } else {
+        }
+        else {
             escaped = false;
         }
     }
@@ -491,38 +389,15 @@ static std::string validateCharacterLiteral(std::string_view literal, bool isByt
     }
 
     if (content.front() == '\\') {
-        if (content.size() == 2 &&
-            std::string_view("nrt0\\\'\"").find(content[1]) != std::string_view::npos) {
+        if (content.size() == 2 && std::string_view("nrt0\\\'\"").find(content[1]) != std::string_view::npos) {
             return {};
         }
 
         if (content.size() == 4 && content[1] == 'x' &&
             isHexDigit(content[2]) && isHexDigit(content[3])) {
-            const unsigned int value = parseHexIgnoringUnderscores(content.substr(2));
+            const unsigned int value = parseHex(content.substr(2));
             if (!isByte && value > 0x7FU) {
                 return "a character \\x escape must be in the ASCII range";
-            }
-            return {};
-        }
-
-        if (!isByte && content.size() >= 5 && content.substr(0, 3) == "\\u{" &&
-            content.back() == '}') {
-            const std::string_view digits = content.substr(3, content.size() - 4);
-            int digitCount = 0;
-            for (const char character : digits) {
-                if (character != '_') {
-                    if (!isHexDigit(character)) {
-                        return "invalid Unicode escape in character literal";
-                    }
-                    ++digitCount;
-                }
-            }
-            if (digitCount < 1 || digitCount > 6) {
-                return "Unicode escape must contain from one to six hex digits";
-            }
-            const unsigned int value = parseHexIgnoringUnderscores(digits);
-            if (value > 0x10FFFFU || (value >= 0xD800U && value <= 0xDFFFU)) {
-                return "Unicode escape is not a valid scalar value";
             }
             return {};
         }
@@ -530,13 +405,11 @@ static std::string validateCharacterLiteral(std::string_view literal, bool isByt
         return "unknown character escape";
     }
 
-    const std::size_t characterLength =
-        utf8CharacterLength(static_cast<unsigned char>(content.front()));
-    if (characterLength == 0 || characterLength != content.size()) {
-        return "a character literal must contain exactly one character";
+    if (containsNonAscii(content)) {
+        return "a character literal may contain only an ASCII character";
     }
-    if (isByte && containsNonAscii(content)) {
-        return "a byte literal may contain only an ASCII character";
+    if (content.size() != 1) {
+        return "a character literal must contain exactly one ASCII character";
     }
     if (content.front() == '\t') {
         return "a tab must be escaped in a character literal";
@@ -555,7 +428,8 @@ static std::string characterLiteralValue(std::string_view literal, bool isByte)
         }
         if (!escaped && literal[closingQuote] == '\\') {
             escaped = true;
-        } else {
+        }
+        else {
             escaped = false;
         }
     }
@@ -565,7 +439,8 @@ static std::string characterLiteralValue(std::string_view literal, bool isByte)
     std::string value;
     if (content.front() == '\\') {
         decodeEscape(content, value);
-    } else {
+    }
+    else {
         value.assign(content);
     }
     return value;
@@ -579,12 +454,13 @@ static void emitCharacterLiteral(const char* kind, bool isByte)
     if (error.empty()) {
         const std::string value = characterLiteralValue(text, isByte);
         if (isByte) {
-            emitUnsignedValue(kind, static_cast<unsigned char>(value.front()),
-                              matchLine, matchColumn);
-        } else {
+            emitUnsignedValue(kind, static_cast<unsigned char>(value.front()), matchLine, matchColumn);
+        }
+        else {
             emitToken(kind, value, matchLine, matchColumn);
         }
-    } else {
+    }
+    else {
         emitToken("ERROR", text, matchLine, matchColumn);
         reportError(error, text, matchLine, matchColumn);
     }
@@ -597,8 +473,7 @@ static void emitIdentifier()
 }
 
 /*
- * `r`, `br` и `cr` перед # могут начинать корректный raw-токен; остальные
- * идентификаторы образуют запрещённый reserved prefix Rust 2021+.
+ * `r`, `br` и `cr` перед # могут начинать корректный raw-токен; остальные идентификаторы образуют запрещённый reserved prefix.
  */
 static bool isAllowedBeforePound(std::string_view identifier)
 {
@@ -606,138 +481,104 @@ static bool isAllowedBeforePound(std::string_view identifier)
 }
 %}
 
-    /* ===== Регулярные выражения идентификаторов и UTF-8 ================ */
-    /*
-     * Пока любой корректно закодированный не-ASCII code point допускается
-     * внутри имени. Точная фильтрация XID и NFC перечислена в TODO наверху.
-     */
-ASCII_ID_START  [a-zA-Z_]
-ASCII_ID_CONT   [a-zA-Z0-9_]
-UTF8_2          [\xC2-\xDF][\x80-\xBF]
-UTF8_3          (\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE-\xEF][\x80-\xBF]{2}|\xED[\x80-\x9F][\x80-\xBF])
-UTF8_4          (\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}|\xF4[\x80-\x8F][\x80-\xBF]{2})
-UTF8_CHAR       ({UTF8_2}|{UTF8_3}|{UTF8_4})
-ID_START        ({ASCII_ID_START}|{UTF8_CHAR})
-ID_CONT         ({ASCII_ID_CONT}|{UTF8_CHAR})
-IDENTIFIER      {ID_START}{ID_CONT}*
-SUFFIX          (([a-zA-Z]|{UTF8_CHAR}){ID_CONT}*|_{ID_CONT}+)
 
-    /* ===== Регулярные выражения числовых литералов ===================== */
-    /* Суффикс отделяется не здесь: по Rust Reference он разрешён у любого
-     * literal token, а его смысл проверяется на следующих этапах. */
+
+/* Регулярные выражения ASCII-идентификаторов */
+ID_START        [a-zA-Z_]
+ID_CONT         [a-zA-Z0-9_]
+IDENTIFIER      {ID_START}{ID_CONT}*
+SUFFIX          ([a-zA-Z]{ID_CONT}*|_{ID_CONT}+)
+
+
+
+/* Регулярные выражения числовых литералов */
+/* Суффикс отделяется не здесь, он разрешён у любого literal token, а его смысл проверяется на следующих этапах. */
 DEC_NUMBER      [0-9][0-9_]*
 BIN_NUMBER      0b_*[01][01_]*
 OCT_NUMBER      0o_*[0-7][0-7_]*
 HEX_NUMBER      0x_*[0-9a-fA-F][0-9a-fA-F_]*
 EXPONENT        [eE][+-]?_*[0-9][0-9_]*
 
-    /* ===== Общие элементы строк и символьных литералов ================= */
-UNICODE_ESCAPE  \\u\{([0-9a-fA-F]_*){1,6}\}
-CHAR_UNIT       ([^\'\\\r\n]|\\x[0-9a-fA-F]{2}|{UNICODE_ESCAPE}|\\[^\r\n])
-PATTERN_WS      ([ \t\v\f\r\n]|\xC2\x85|\xE2\x80[\x8E\x8F\xA8\xA9])
+
+
+/* Общие элементы строк и символьных литералов */
+CHAR_UNIT       ([^\'\\\r\n]|\\x[0-9a-fA-F]{2}|\\[^\r\n])
+PATTERN_WS      [ \t\v\f\r\n]
+
+
+
 
 %%
+ /* ЗОНА 1 Пробельные символы */
 
-    /* ================================================================== */
-    /* ЗОНА A. Начало файла, BOM, shebang и пробельные символы             */
-    /* ================================================================== */
+{PATTERN_WS}+   { /* Пробелы только разделяют токены. */ }
 
-\xEF\xBB\xBF                    {
-                                      if (matchLine == 1 && matchColumn == 1) {
-                                          /* A leading BOM does not occupy a source column. */
-                                          currentColumn = 1;
-                                      } else {
-                                          emitCurrentError("UTF-8 BOM is allowed only at the start of a file");
-                                      }
-                                  }
 
-^"#!"[^\r\n]*                  {
-                                      const bool isInitialShebang =
-                                          matchLine == 1 && matchColumn == 1 &&
-                                          (yyleng == 2 || yytext[2] != '[');
-                                      if (isInitialShebang) {
-                                          emitCurrentToken("SHEBANG");
-                                      } else {
-                                          yyless(1);
-                                          keepMatchedPrefix(yytext, 1);
-                                          emitToken("POUND", "#", matchLine, matchColumn);
-                                      }
-                                  }
+ /* ЗОНА 2 Ключевые слова */
 
-{PATTERN_WS}+                    { /* Пробелы только разделяют токены. */ }
+"_"         { emitCurrentToken("UNDERSCORE"); }
+"as"        { emitCurrentToken("AS"); }
+"async"     { emitCurrentToken("ASYNC"); }
+"await"     { emitCurrentToken("AWAIT"); }
+"break"     { emitCurrentToken("BREAK"); }
+"const"     { emitCurrentToken("CONST"); }
+"continue"  { emitCurrentToken("CONTINUE"); }
+"crate"     { emitCurrentToken("CRATE"); }
+"dyn"       { emitCurrentToken("DYN"); }
+"else"      { emitCurrentToken("ELSE"); }
+"enum"      { emitCurrentToken("ENUM"); }
+"extern"    { emitCurrentToken("EXTERN"); }
+"false"     { emitCurrentToken("FALSE"); }
+"fn"        { emitCurrentToken("FN"); }
+"for"       { emitCurrentToken("FOR"); }
+"if"        { emitCurrentToken("IF"); }
+"impl"      { emitCurrentToken("IMPL"); }
+"in"        { emitCurrentToken("IN"); }
+"let"       { emitCurrentToken("LET"); }
+"loop"      { emitCurrentToken("LOOP"); }
+"match"     { emitCurrentToken("MATCH"); }
+"mod"       { emitCurrentToken("MOD"); }
+"move"      { emitCurrentToken("MOVE"); }
+"mut"       { emitCurrentToken("MUT"); }
+"pub"       { emitCurrentToken("PUB"); }
+"ref"       { emitCurrentToken("REF"); }
+"return"    { emitCurrentToken("RETURN"); }
+"self"      { emitCurrentToken("SELF_VALUE"); }
+"Self"      { emitCurrentToken("SELF_TYPE"); }
+"static"    { emitCurrentToken("STATIC"); }
+"struct"    { emitCurrentToken("STRUCT"); }
+"super"     { emitCurrentToken("SUPER"); }
+"trait"     { emitCurrentToken("TRAIT"); }
+"true"      { emitCurrentToken("TRUE"); }
+"type"      { emitCurrentToken("TYPE"); }
+"unsafe"    { emitCurrentToken("UNSAFE"); }
+"use"       { emitCurrentToken("USE"); }
+"where"     { emitCurrentToken("WHERE"); }
+"while"     { emitCurrentToken("WHILE"); }
 
-    /* ================================================================== */
-    /* ЗОНА B. Ключевые слова                                             */
-    /* Каждое слово — отдельное Flex-правило, как требует лабораторная.   */
-    /* Имена типов и weak keywords намеренно сюда не входят: это ID.      */
-    /* ================================================================== */
+"abstract"  { emitCurrentToken("ABSTRACT"); }
+"become"    { emitCurrentToken("BECOME"); }
+"box"       { emitCurrentToken("BOX"); }
+"do"        { emitCurrentToken("DO"); }
+"final"     { emitCurrentToken("FINAL"); }
+"macro"     { emitCurrentToken("MACRO"); }
+"override"  { emitCurrentToken("OVERRIDE"); }
+"priv"      { emitCurrentToken("PRIV"); }
+"try"       { emitCurrentToken("TRY"); }
+"typeof"    { emitCurrentToken("TYPEOF"); }
+"unsized"   { emitCurrentToken("UNSIZED"); }
+"virtual"   { emitCurrentToken("VIRTUAL"); }
+"yield"     { emitCurrentToken("YIELD"); }
 
-"_"                               { emitCurrentToken("UNDERSCORE"); }
-"as"                              { emitCurrentToken("AS"); }
-"async"                           { emitCurrentToken("ASYNC"); }
-"await"                           { emitCurrentToken("AWAIT"); }
-"break"                           { emitCurrentToken("BREAK"); }
-"const"                           { emitCurrentToken("CONST"); }
-"continue"                        { emitCurrentToken("CONTINUE"); }
-"crate"                           { emitCurrentToken("CRATE"); }
-"dyn"                             { emitCurrentToken("DYN"); }
-"else"                            { emitCurrentToken("ELSE"); }
-"enum"                            { emitCurrentToken("ENUM"); }
-"extern"                          { emitCurrentToken("EXTERN"); }
-"false"                           { emitCurrentToken("FALSE"); }
-"fn"                              { emitCurrentToken("FN"); }
-"for"                             { emitCurrentToken("FOR"); }
-"if"                              { emitCurrentToken("IF"); }
-"impl"                            { emitCurrentToken("IMPL"); }
-"in"                              { emitCurrentToken("IN"); }
-"let"                             { emitCurrentToken("LET"); }
-"loop"                            { emitCurrentToken("LOOP"); }
-"match"                           { emitCurrentToken("MATCH"); }
-"mod"                             { emitCurrentToken("MOD"); }
-"move"                            { emitCurrentToken("MOVE"); }
-"mut"                             { emitCurrentToken("MUT"); }
-"pub"                             { emitCurrentToken("PUB"); }
-"ref"                             { emitCurrentToken("REF"); }
-"return"                          { emitCurrentToken("RETURN"); }
-"self"                            { emitCurrentToken("SELF_VALUE"); }
-"Self"                            { emitCurrentToken("SELF_TYPE"); }
-"static"                          { emitCurrentToken("STATIC"); }
-"struct"                          { emitCurrentToken("STRUCT"); }
-"super"                           { emitCurrentToken("SUPER"); }
-"trait"                           { emitCurrentToken("TRAIT"); }
-"true"                            { emitCurrentToken("TRUE"); }
-"type"                            { emitCurrentToken("TYPE"); }
-"unsafe"                          { emitCurrentToken("UNSAFE"); }
-"use"                             { emitCurrentToken("USE"); }
-"where"                           { emitCurrentToken("WHERE"); }
-"while"                           { emitCurrentToken("WHILE"); }
 
-"abstract"                        { emitCurrentToken("ABSTRACT"); }
-"become"                          { emitCurrentToken("BECOME"); }
-"box"                             { emitCurrentToken("BOX"); }
-"do"                              { emitCurrentToken("DO"); }
-"final"                           { emitCurrentToken("FINAL"); }
-"macro"                           { emitCurrentToken("MACRO"); }
-"override"                        { emitCurrentToken("OVERRIDE"); }
-"priv"                            { emitCurrentToken("PRIV"); }
-"try"                             { emitCurrentToken("TRY"); }
-"typeof"                          { emitCurrentToken("TYPEOF"); }
-"unsized"                         { emitCurrentToken("UNSIZED"); }
-"virtual"                         { emitCurrentToken("VIRTUAL"); }
-"yield"                           { emitCurrentToken("YIELD"); }
+ /* ЗОНА 3 Однострочные комментарии и line doc comments */
 
-    /* ================================================================== */
-    /* ЗОНА C. Однострочные комментарии и line doc comments               */
-    /* ================================================================== */
-
-"//!"[^\r\n]*                 { emitCurrentToken("INNER_LINE_DOC_COMMENT"); }
+"//!"[^\r\n]*               { emitCurrentToken("INNER_LINE_DOC_COMMENT"); }
 "///"([^/\r\n][^\r\n]*)?    { emitCurrentToken("OUTER_LINE_DOC_COMMENT"); }
-"//"[^\r\n]*                  { emitCurrentToken("LINE_COMMENT"); }
+"//"[^\r\n]*                { emitCurrentToken("LINE_COMMENT"); }
 
-    /* ================================================================== */
-    /* ЗОНА D. Вложенные блочные и block doc comments                     */
-    /* BLOCK_COMMENT — exclusive state до выравнивания вложенности.       */
-    /* ================================================================== */
+
+ /* ЗОНА 4 Вложенные блочные и block doc comments */
 
 "/*"                            {
                                       beginAccumulated("BLOCK_COMMENT", StringFlavor::Normal,
@@ -776,10 +617,8 @@ PATTERN_WS      ([ \t\v\f\r\n]|\xC2\x85|\xE2\x80[\x8E\x8F\xA8\xA9])
                                       return 0;
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА E. Открывающие части raw-, raw byte- и raw C-строк            */
-    /* Число # сохраняется и сравнивается с закрывающим разделителем.     */
-    /* ================================================================== */
+
+ /* ЗОНА 5 Открывающие части raw-, raw byte- и raw C-строк */
 
 br[#]*\"                         {
                                       beginAccumulated("RAW_BYTE_STRING_LITERAL",
@@ -809,9 +648,8 @@ r[#]*\"                          {
                                       BEGIN(RAW_STRING);
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА F. Обычные String / Byte string / C string                    */
-    /* ================================================================== */
+
+ /* ЗОНА 6 Обычные String / Byte string / C string */
 
 b\"                               {
                                       beginAccumulated("BYTE_STRING_LITERAL",
@@ -829,10 +667,8 @@ c\"                               {
                                       BEGIN(STRING);
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА G. Содержимое обычных строк и escape-последовательности        */
-    /* STRING завершается только кавычкой; ошибка сохраняется до конца.   */
-    /* ================================================================== */
+
+ /* ЗОНА 7 Содержимое обычных строк и escape-последовательности */
 
 <STRING>[^\"\\\r]+             {
                                       appendAccumulated(yytext, yyleng);
@@ -858,15 +694,7 @@ c\"                               {
                                       validateHexEscape(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
                                   }
-<STRING>{UNICODE_ESCAPE}           {
-                                      appendAccumulated(yytext, yyleng);
-                                      decodeEscape(
-                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)),
-                                          accumulatedValue);
-                                      validateUnicodeEscape(
-                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)));
-                                  }
-<STRING>\\\n{PATTERN_WS}*         { appendAccumulated(yytext, yyleng); }
+<STRING>\\\r?\n{PATTERN_WS}*       { appendAccumulated(yytext, yyleng); }
 <STRING>\\.                       {
                                       appendAccumulated(yytext, yyleng);
                                       markAccumulatedError("unknown string escape");
@@ -874,6 +702,10 @@ c\"                               {
 <STRING>\\                        {
                                       appendAccumulated(yytext, yyleng);
                                       markAccumulatedError("unfinished string escape");
+                                  }
+<STRING>\r\n                       {
+                                      appendAccumulated(yytext, yyleng);
+                                      accumulatedValue.push_back('\n');
                                   }
 <STRING>\r                         {
                                       appendAccumulated(yytext, yyleng);
@@ -892,10 +724,8 @@ c\"                               {
                                       return 0;
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА H. Содержимое raw-строк                                       */
-    /* В raw-строках backslash ничего не экранирует.                      */
-    /* ================================================================== */
+
+ /* ЗОНА 8 Содержимое raw-строк */
 
 <RAW_STRING>[^\"\r]+             {
                                       appendAccumulated(yytext, yyleng);
@@ -903,6 +733,10 @@ c\"                               {
                                           static_cast<std::size_t>(yyleng));
                                       validateStringContent(
                                           std::string_view(yytext, static_cast<std::size_t>(yyleng)));
+                                  }
+<RAW_STRING>\r\n                   {
+                                      appendAccumulated(yytext, yyleng);
+                                      accumulatedValue.push_back('\n');
                                   }
 <RAW_STRING>\r                     {
                                       appendAccumulated(yytext, yyleng);
@@ -941,10 +775,8 @@ c\"                               {
                                       return 0;
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА I. Character и byte character literals                       */
-    /* Закрытые литералы берёт CHAR_UNIT; BYTE_CHAR ловит незавершённые.  */
-    /* ================================================================== */
+
+ /* ЗОНА 8 Character и byte character literals */
 
 b\'{CHAR_UNIT}\'{SUFFIX}?        {
                                       emitCharacterLiteral("BYTE_LITERAL", true);
@@ -992,11 +824,8 @@ b\'                                {
                                       return 0;
                                   }
 
-    /* ================================================================== */
-    /* ЗОНА I. Lifetime и raw lifetime                                    */
-    /* Эти правила стоят после CHAR_LITERAL, чтобы 'a' был символом,      */
-    /* а 'a без закрывающей кавычки — lifetime.                           */
-    /* ================================================================== */
+
+ /* ЗОНА 9 Lifetime и raw lifetime */
 
 \'r#(crate|self|Self|super|_)     { emitCurrentError("this raw lifetime name is reserved"); }
 \'r#{IDENTIFIER}                  { emitCurrentToken("RAW_LIFETIME"); }
@@ -1011,18 +840,14 @@ b\'                                {
                                   }
 \'{IDENTIFIER}                    { emitCurrentToken("LIFETIME"); }
 
-    /* ================================================================== */
-    /* ЗОНА J. Raw identifiers                                            */
-    /* r#_, r#crate, r#self, r#Self и r#super зарезервированы.             */
-    /* ================================================================== */
+
+ /* ЗОНА J. Raw identifiers */
 
 r#(crate|self|Self|super|_)       { emitCurrentError("this raw identifier name is reserved"); }
 r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 
-    /* ================================================================== */
-    /* ЗОНА K. Целочисленные литералы: binary / octal / hexadecimal       */
-    /* Сначала ловятся неоднозначные ошибки, затем корректные основания.  */
-    /* ================================================================== */
+
+ /* ЗОНА 9 Целочисленные литералы: binary / octal / hexadecimal */
 
 {BIN_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("binary integer literal may not be followed by e or E"); }
 {OCT_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("octal integer literal may not be followed by e or E"); }
@@ -1036,10 +861,8 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 0o{ID_CONT}*                      { emitCurrentError("invalid octal integer literal"); }
 0x{ID_CONT}*                      { emitCurrentError("invalid hexadecimal integer literal"); }
 
-    /* ================================================================== */
-    /* ЗОНА L. Decimal integer и floating-point literals                  */
-    /* Trailing context не даёт принять 1..2 и 1.field за float.          */
-    /* ================================================================== */
+
+ /* ЗОНА 10 Decimal integer и floating-point literals */
 
 {DEC_NUMBER}(\.{DEC_NUMBER})?{EXPONENT}{SUFFIX}? {
                                       emitFloatingLiteral();
@@ -1054,10 +877,8 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 {DEC_NUMBER}(f32|f64)             { emitFloatingLiteral(); }
 {DEC_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
 
-    /* ================================================================== */
-    /* ЗОНА N. Reserved prefixes и обычные идентификаторы                 */
-    /* Пример ошибки: custom"text" или custom#attribute.                 */
-    /* ================================================================== */
+
+ /* ЗОНА 11 Reserved prefixes и обычные идентификаторы */
 
 {IDENTIFIER}/\"                 { emitCurrentError("reserved identifier prefix before a string"); }
 {IDENTIFIER}/\'                  { emitCurrentError("reserved identifier prefix before a character quote"); }
@@ -1073,10 +894,8 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 
 {IDENTIFIER}                      { emitIdentifier(); }
 
-    /* ================================================================== */
-    /* ЗОНА O. Составная пунктуация и операторы (проверяется первой)       */
-    /* Flex выбирает самое длинное совпадение: >>= раньше, чем >> и >.     */
-    /* ================================================================== */
+
+ /* ЗОНА 12 Составная пунктуация и операторы (проверяется первой) */
 
 "..="                             { emitCurrentToken("RANGE_INCLUSIVE"); }
 "<<="                             { emitCurrentToken("SHIFT_LEFT_ASSIGN"); }
@@ -1102,9 +921,8 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "|="                              { emitCurrentToken("BIT_OR_ASSIGN"); }
 "||"                              { emitCurrentToken("LOGICAL_OR"); }
 
-    /* ================================================================== */
-    /* ЗОНА P. Односимвольная пунктуация, операторы и delimiters           */
-    /* ================================================================== */
+
+ /* ЗОНА 13 Односимвольная пунктуация, операторы и delimiters */
 
 "!"                               { emitCurrentToken("BANG"); }
 "#"                               { emitCurrentToken("POUND"); }
@@ -1134,14 +952,13 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "}"                               { emitCurrentToken("RIGHT_BRACE"); }
 "~"                               { emitCurrentToken("TILDE"); }
 
-    /* ================================================================== */
-    /* ЗОНА Q. Неизвестные символы и конец файла                           */
-    /* ================================================================== */
+
+ /* ЗОНА 14 Неизвестные символы и конец файла */
 
 \'                                { emitCurrentError("unexpected single quote"); }
 .                                 { emitCurrentError("unknown character"); }
 
-    /* EOF печатается как отдельный маркер, чтобы тестировать конец ввода. */
+ /* EOF печатается как отдельный маркер, чтобы тестировать конец ввода. */
 <<EOF>>                           {
                                       emitToken("EOF", "", currentLine, currentColumn);
                                       return 0;

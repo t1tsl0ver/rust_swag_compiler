@@ -19,7 +19,7 @@ if(NOT "${actual_exit}" STREQUAL "${EXPECTED_EXIT}")
 endif()
 
 set(complete_output "${lexer_stdout}\n${lexer_stderr}")
-file(STRINGS "${EXPECTATIONS}" required_fragments ENCODING UTF-8)
+file(STRINGS "${EXPECTATIONS}" required_fragments)
 
 foreach(fragment IN LISTS required_fragments)
     string(STRIP "${fragment}" fragment)

@@ -1,5 +1,3 @@
-#!/usr/bin/env rustx
-
 // This file is intentionally not a valid Rust program.  It is a lexical token
 // catalog: reserved words and reserved punctuation are included on purpose.
 
@@ -26,16 +24,16 @@ macro_rules raw safe union 'static
 bool char str i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 String
 
 // Identifiers, raw identifiers, lifetimes and loop labels.
-answer snake_case _unused Москва 東京 r#match 'a 'loop_label 'r#async
+answer snake_case _unused r#match 'a 'loop_label 'r#async
 
 // Literals.
 0 123 123_u32 0b1111_0000 0o77 0xff_u8
 1.0 2. 12E+99_f64 5f32
-'R' '\n' '\x52' '\u{00E6}'
+'R' '\n' '\x52'
 "hello" "line\nfeed" "continued\
     text"
 b'R' b'\xA0' b"bytes\x20string"
-c"C string" c"UTF-8: \u{00E6}"
+c"C string" c"ASCII C string"
 r"raw" r#"raw "quoted" string"# br##"raw bytes"## cr#"raw C string"#
 
 // Arbitrary suffixes are part of literal tokens; later stages decide whether

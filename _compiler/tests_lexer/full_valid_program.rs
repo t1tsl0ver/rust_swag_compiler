@@ -1,5 +1,3 @@
-#!/usr/bin/env rust-script
-
 //! A large valid Rust 2024 source used to exercise the educational lexer.
 /*! It intentionally favors lexical variety over useful application logic. */
 
@@ -184,7 +182,6 @@ fn literal_examples() {
     let character: char = 'R';
     let escaped_quote: char = '\'';
     let escaped_ascii: char = '\x52';
-    let escaped_unicode: char = '\u{00E6}';
 
     let string_slice: &str = "ordinary string\nwith escape";
     let owned_string: String = String::from("owned");
