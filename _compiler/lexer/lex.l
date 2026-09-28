@@ -778,6 +778,7 @@ c\"                               {
 
  /* ЗОНА 8 Character и byte character literals */
 
+// b\'{CHAR_UNIT}{2,}\'{SUFFIX}?        {
 b\'{CHAR_UNIT}\'{SUFFIX}?        {
                                       emitCharacterLiteral("BYTE_LITERAL", true);
                                   }
@@ -876,7 +877,6 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 {DEC_NUMBER}\.                   { emitFloatingLiteral(); }
 {DEC_NUMBER}(f32|f64)             { emitFloatingLiteral(); }
 {DEC_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
-
 
  /* ЗОНА 11 Reserved prefixes и обычные идентификаторы */
 
