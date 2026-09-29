@@ -787,7 +787,7 @@ c\"                               {
 
  /* ЗОНА 8 Character и byte character literals */
 
-// b\'{CHAR_UNIT}{2,}\'{SUFFIX}?        {
+ /* b\'{CHAR_UNIT}{2,}\'{SUFFIX}?        { */
 b\'{CHAR_UNIT}\'{SUFFIX}?        {
                                       emitCharacterLiteral("BYTE_LITERAL", true);
                                   }
