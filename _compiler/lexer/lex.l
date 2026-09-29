@@ -6,7 +6,7 @@
 %option nounput
 
 %x STRING
-%x RAW_STRING
+%x RAW_STRING RAW_BYTE_STRING RAW_C_STRING
 %x BLOCK_COMMENT
 %x BYTE_CHAR
 
@@ -44,9 +44,6 @@ enum class StringFlavor {
     Normal,
     Byte,
     C,
-    Raw,
-    RawByte,
-    RawC,
 };
 
 static StringFlavor stringFlavor = StringFlavor::Normal;
@@ -184,16 +181,22 @@ static int countOpeningHashes(std::string_view text)
 /*
  * Начинает накапливать лексему, которую нельзя получить одним regex-правилом (строку, raw-строку, блочный комментарий или незавершённый byte-символ).
  */
-static void beginAccumulated(const char* kind, StringFlavor flavor, const char* text, int length, bool hasSemanticValue = false)
+static void beginAccumulated(const char* kind, const char* text, int length, bool hasSemanticValue = false)
 {
     accumulatedKind = kind;
-    stringFlavor = flavor;
     accumulatedText.assign(text, static_cast<std::size_t>(length));
     accumulatedValue.clear();
     accumulatedError.clear();
     accumulatedHasSemanticValue = hasSemanticValue;
     accumulatedLine = matchLine;
     accumulatedColumn = matchColumn;
+}
+
+/* Обычные строки дополнительно запоминают вид для проверки escape-последовательностей. */
+static void beginAccumulated(const char* kind, StringFlavor flavor, const char* text, int length, bool hasSemanticValue = false)
+{
+    beginAccumulated(kind, text, length, hasSemanticValue);
+    stringFlavor = flavor;
 }
 
 /* Добавляет очередное совпадение Flex к составной лексеме. */
@@ -217,7 +220,7 @@ static void validateStringContent(std::string_view text)
         markAccumulatedError("a string literal may contain only ASCII characters");
     }
 
-    if ((stringFlavor == StringFlavor::C || stringFlavor == StringFlavor::RawC) && containsNul(text)) {
+    if (stringFlavor == StringFlavor::C && containsNul(text)) {
         markAccumulatedError("a C string may not contain a null byte");
     }
 }
@@ -622,25 +625,25 @@ PATTERN_WS      [ \t\v\f\r\n]
 
 br[#]*\"                         {
                                       beginAccumulated("RAW_BYTE_STRING_LITERAL",
-                                                       StringFlavor::RawByte, yytext, yyleng, true);
+                                                       yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
                                       }
-                                      BEGIN(RAW_STRING);
+                                      BEGIN(RAW_BYTE_STRING);
                                   }
 cr[#]*\"                         {
                                       beginAccumulated("RAW_C_STRING_LITERAL",
-                                                       StringFlavor::RawC, yytext, yyleng, true);
+                                                       yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
                                       }
-                                      BEGIN(RAW_STRING);
+                                      BEGIN(RAW_C_STRING);
                                   }
 r[#]*\"                          {
                                       beginAccumulated("RAW_STRING_LITERAL",
-                                                       StringFlavor::Raw, yytext, yyleng, true);
+                                                       yytext, yyleng, true);
                                       rawHashCount = countOpeningHashes(accumulatedText);
                                       if (rawHashCount > 255) {
                                           markAccumulatedError("raw strings may use at most 255 # characters");
@@ -727,24 +730,30 @@ c\"                               {
 
  /* ЗОНА 8 Содержимое raw-строк */
 
-<RAW_STRING>[^\"\r]+             {
+<RAW_STRING,RAW_BYTE_STRING,RAW_C_STRING>[^\"\r]+ {
                                       appendAccumulated(yytext, yyleng);
                                       accumulatedValue.append(yytext,
                                           static_cast<std::size_t>(yyleng));
-                                      validateStringContent(
-                                          std::string_view(yytext, static_cast<std::size_t>(yyleng)));
+                                      const std::string_view content(yytext,
+                                          static_cast<std::size_t>(yyleng));
+                                      if (containsNonAscii(content)) {
+                                          markAccumulatedError("a string literal may contain only ASCII characters");
+                                      }
+                                      if (YY_START == RAW_C_STRING && containsNul(content)) {
+                                          markAccumulatedError("a C string may not contain a null byte");
+                                      }
                                   }
-<RAW_STRING>\r\n                   {
+<RAW_STRING,RAW_BYTE_STRING,RAW_C_STRING>\r\n {
                                       appendAccumulated(yytext, yyleng);
                                       accumulatedValue.push_back('\n');
                                   }
-<RAW_STRING>\r                     {
+<RAW_STRING,RAW_BYTE_STRING,RAW_C_STRING>\r {
                                       appendAccumulated(yytext, yyleng);
                                       accumulatedValue.append(yytext,
                                           static_cast<std::size_t>(yyleng));
                                       markAccumulatedError("carriage return is not allowed in a raw string literal");
                                   }
-<RAW_STRING>\"[#]*{SUFFIX}?       {
+<RAW_STRING,RAW_BYTE_STRING,RAW_C_STRING>\"[#]*{SUFFIX}? {
                                       int closingHashes = 0;
                                       while (1 + closingHashes < yyleng &&
                                              yytext[1 + closingHashes] == '#') {
@@ -767,7 +776,7 @@ c\"                               {
                                           BEGIN(INITIAL);
                                       }
                                   }
-<RAW_STRING><<EOF>>                {
+<RAW_STRING,RAW_BYTE_STRING,RAW_C_STRING><<EOF>> {
                                       emitToken("ERROR", accumulatedText,
                                                 accumulatedLine, accumulatedColumn);
                                       reportError("raw string literal is not closed", accumulatedText,
@@ -974,8 +983,7 @@ static void printUsage(const char* executable)
 }
 
 /*
- * CLI-точка входа: открывает один .rs-файл, запускает Flex и преобразует
- * накопленный флаг ошибок в документированные коды возврата 0/1/2.
+ * CLI-точка входа: открывает один .rs-файл, запускает Flex и преобразует накопленный флаг ошибок в документированные коды возврата 0/1/2.
  */
 int main(int argc, char** argv)
 {
