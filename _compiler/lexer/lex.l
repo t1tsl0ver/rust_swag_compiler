@@ -785,7 +785,7 @@ c\"                               {
                                   }
 
 
- /* ЗОНА 8 Character и byte character literals */
+ /* ЗОНА 9 Character и byte character literals */
 
  /* b\'{CHAR_UNIT}{2,}\'{SUFFIX}?        { */
 b\'{CHAR_UNIT}\'{SUFFIX}?        {
@@ -835,7 +835,7 @@ b\'                                {
                                   }
 
 
- /* ЗОНА 9 Lifetime и raw lifetime */
+ /* ЗОНА 10 Lifetime и raw lifetime */
 
 \'r#(crate|self|Self|super|_)     { emitCurrentError("this raw lifetime name is reserved"); }
 \'r#{IDENTIFIER}                  { emitCurrentToken("RAW_LIFETIME"); }
@@ -851,13 +851,13 @@ b\'                                {
 \'{IDENTIFIER}                    { emitCurrentToken("LIFETIME"); }
 
 
- /* ЗОНА J. Raw identifiers */
+ /* ЗОНА 11. Raw identifiers */
 
 r#(crate|self|Self|super|_)       { emitCurrentError("this raw identifier name is reserved"); }
 r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 
 
- /* ЗОНА 9 Целочисленные литералы: binary / octal / hexadecimal */
+ /* ЗОНА 12 Целочисленные литералы: binary / octal / hexadecimal */
 
 {BIN_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("binary integer literal may not be followed by e or E"); }
 {OCT_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("octal integer literal may not be followed by e or E"); }
@@ -872,7 +872,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 0x{ID_CONT}*                      { emitCurrentError("invalid hexadecimal integer literal"); }
 
 
- /* ЗОНА 10 Decimal integer и floating-point literals */
+ /* ЗОНА 13 Decimal integer и floating-point literals */
 
 {DEC_NUMBER}(\.{DEC_NUMBER})?{EXPONENT}{SUFFIX}? {
                                       emitFloatingLiteral();
@@ -887,7 +887,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 {DEC_NUMBER}(f32|f64)             { emitFloatingLiteral(); }
 {DEC_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
 
- /* ЗОНА 11 Reserved prefixes и обычные идентификаторы */
+ /* ЗОНА 14 Reserved prefixes и обычные идентификаторы */
 
 {IDENTIFIER}/\"                 { emitCurrentError("reserved identifier prefix before a string"); }
 {IDENTIFIER}/\'                  { emitCurrentError("reserved identifier prefix before a character quote"); }
@@ -904,7 +904,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 {IDENTIFIER}                      { emitIdentifier(); }
 
 
- /* ЗОНА 12 Составная пунктуация и операторы (проверяется первой) */
+ /* ЗОНА 15 Составная пунктуация и операторы (проверяется первой) */
 
 "..="                             { emitCurrentToken("RANGE_INCLUSIVE"); }
 "<<="                             { emitCurrentToken("SHIFT_LEFT_ASSIGN"); }
@@ -931,7 +931,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "||"                              { emitCurrentToken("LOGICAL_OR"); }
 
 
- /* ЗОНА 13 Односимвольная пунктуация, операторы и delimiters */
+ /* ЗОНА 16 Односимвольная пунктуация, операторы и delimiters */
 
 "!"                               { emitCurrentToken("BANG"); }
 "#"                               { emitCurrentToken("POUND"); }
@@ -962,7 +962,7 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 "~"                               { emitCurrentToken("TILDE"); }
 
 
- /* ЗОНА 14 Неизвестные символы и конец файла */
+ /* ЗОНА 17 Неизвестные символы и конец файла */
 
 \'                                { emitCurrentError("unexpected single quote"); }
 .                                 { emitCurrentError("unknown character"); }
