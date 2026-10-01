@@ -18,13 +18,13 @@ super trait true type unsafe use where while
 abstract become box do final gen macro override priv try typeof unsized virtual yield
 
 // Context-dependent words remain identifiers; the parser will interpret them.
-macro_rules raw safe union 'static
+macro_rules raw safe union
 
 // Primitive type names plus the commonly used standard-library String type.
 bool char str i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 String
 
-// Identifiers, raw identifiers, lifetimes and loop labels.
-answer snake_case _unused r#match 'a 'loop_label 'r#async
+// Identifiers and raw identifiers.
+answer snake_case _unused r#match
 
 // Literals.
 0 123 123_u32 0b1111_0000 0o77 0xff_u8
@@ -32,13 +32,11 @@ answer snake_case _unused r#match 'a 'loop_label 'r#async
 'R' '\n' '\x52'
 "hello" "line\nfeed" "continued\
     text"
-b'R' b'\xA0' b"bytes\x20string"
-c"C string" c"ASCII C string"
-r"raw" r#"raw "quoted" string"# br##"raw bytes"## cr#"raw C string"#
+r"raw" r#"raw "quoted" string"#
 
 // Arbitrary suffixes are part of literal tokens; later stages decide whether
 // a suffix makes sense for a particular expression.
-123custom 1.0custom 'R'custom "text"custom b'R'custom b"bytes"custom
+123custom 1.0custom 'R'custom "text"custom
 
 // Punctuation. Removed spellings `...` and `<-` intentionally split into
 // ordinary punctuation tokens.

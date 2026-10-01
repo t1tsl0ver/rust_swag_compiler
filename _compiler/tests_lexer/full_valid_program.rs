@@ -9,7 +9,6 @@
     unused_unsafe
 )]
 
-use std::ffi::CStr;
 use std::fmt::Debug;
 
 // An ordinary line comment.
@@ -18,7 +17,6 @@ const ANSWER: i32 = 42;
 const HEX_MASK: u32 = 0xFF_00_FF_00;
 static APPLICATION_NAME: &str = "lexer-test";
 
-type SharedText<'a> = &'a str;
 type Callback = extern "C" fn(i32) -> i32;
 
 /// A generic point documented with an outer line doc comment.
@@ -51,10 +49,10 @@ struct TupleStruct(i32, bool, char);
 struct UnitStruct;
 
 #[derive(Debug)]
-enum Message<'a> {
+enum Message {
     Quit,
     Move { x: i32, y: i32 },
-    Write(&'a str),
+    Write(String),
     ChangeColor(u8, u8, u8),
 }
 
@@ -116,29 +114,25 @@ extern "C" fn callback(value: i32) -> i32 {
     value + 1
 }
 
-fn select<'a, T>(left: &'a T, right: &'a T, choose_left: bool) -> &'a T
+fn select<T>(values: &[T], choose_left: bool) -> &T
 where
     T: Debug,
 {
     if choose_left {
-        left
+        &values[0]
     } else {
-        right
+        &values[1]
     }
 }
 
-fn raw_lifetime<'r#async>(value: &'r#async str) -> &'r#async str {
-    value
-}
-
-fn checked_division(left: i32, right: i32) -> Result<i32, &'static str> {
+fn checked_division(left: i32, right: i32) -> Result<i32, String> {
     if right == 0 {
-        return Err("division by zero");
+        return Err(String::from("division by zero"));
     }
     Ok(left / right)
 }
 
-fn question_mark_operator() -> Result<i32, &'static str> {
+fn question_mark_operator() -> Result<i32, String> {
     let result = checked_division(84, 2)?;
     Ok(result)
 }
@@ -191,14 +185,6 @@ second line";
                      right";
     let raw = r#"raw string contains "quotes" and \\slashes"#;
 
-    let byte: u8 = b'R';
-    let escaped_byte: u8 = b'\xA0';
-    let bytes: &[u8] = b"byte\x20string";
-    let raw_bytes: &[u8] = br##"raw byte "string""##;
-
-    let c_string: &CStr = c"C string";
-    let raw_c_string: &CStr = cr#"raw C "string""#;
-
     let unit: () = ();
     let tuple: (i32, bool, char) = (1, false, 'x');
     let array: [i32; 3] = [1, 2, 3];
@@ -244,7 +230,7 @@ fn operator_examples() -> i32 {
     arithmetic!(negative, +, arithmetic!(2, *, 3))
 }
 
-fn control_flow_examples(message: Message<'_>) -> i32 {
+fn control_flow_examples(message: Message) -> i32 {
     let mut total = 0;
 
     for number in 0..=5 {
@@ -262,11 +248,9 @@ fn control_flow_examples(message: Message<'_>) -> i32 {
         index += 1;
     }
 
-    'outer: loop {
-        loop {
-            total += 1;
-            break 'outer;
-        }
+    loop {
+        total += 1;
+        break;
     }
 
     let matched = match message {
@@ -298,7 +282,8 @@ fn main() {
     let point = Point::new(3, 4);
     let description = describe_dynamic(&point);
     let other = String::from("other");
-    let selected = select(&description, &other, true);
+    let choices = [description, other];
+    let selected = select(&choices, true);
     let module_value = nested_module::value_from_parent();
     let operation = operator_examples();
     let control = control_flow_examples(Message::Move { x: 1, y: 2 });

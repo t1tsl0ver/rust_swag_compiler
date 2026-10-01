@@ -3,4 +3,3 @@ STRING_LITERAL
 reserved identifier prefix before a string
 reserved identifier prefix before #
 this raw identifier name is reserved
-this raw lifetime name is reserved

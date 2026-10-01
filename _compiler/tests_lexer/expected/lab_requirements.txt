@@ -4,7 +4,6 @@ ID                               "f64"
 FLOAT_LITERAL                    15.5
 STRING_LITERAL                   "ABC\n"
 CHAR_LITERAL                     "D"
-BYTE_LITERAL                     69
 ID                               "gen"
 ID                               "safe"
 ID                               "union"
