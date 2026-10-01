@@ -336,6 +336,7 @@ static std::string validateCharacterLiteral(std::string_view literal)
     std::size_t closingQuote = contentStart;
     bool escaped = false;
 
+    //поиск закрывающей кавычки
     for ( ; closingQuote < literal.size(); ++closingQuote) {
         const char character = literal[closingQuote];
         if (!escaped && character == '\'') {
@@ -348,7 +349,7 @@ static std::string validateCharacterLiteral(std::string_view literal)
             escaped = false;
         }
     }
-
+    // не нашли закрывающую кавычку. (для '\''\')
     if (closingQuote == literal.size()) {
         return "character literal is not closed";
     }
@@ -359,6 +360,7 @@ static std::string validateCharacterLiteral(std::string_view literal)
         return "character literal is empty";
     }
 
+    // escape
     if (content.front() == '\\') {
         if (content.size() == 2 && std::string_view("nrt0\\\'\"").find(content[1]) != std::string_view::npos) {
             return {};
@@ -719,14 +721,17 @@ r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
 
  /* ЗОНА 11 Целочисленные литералы: binary / octal / hexadecimal */
 
+ // 0b101e10 - было бы 0b101 и отдельно e10
 {BIN_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("binary integer literal may not be followed by e or E"); }
 {OCT_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("octal integer literal may not be followed by e or E"); }
 ({BIN_NUMBER}|{OCT_NUMBER}|{HEX_NUMBER})/\.[0-9] {
                                       emitCurrentError("non-decimal integer literal may not be followed by a period");
                                   }
+
 {BIN_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_BIN", 2, 2); }
 {OCT_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_OCT", 8, 2); }
 {HEX_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_HEX", 16, 2); }
+
 0b{ID_CONT}*                      { emitCurrentError("invalid binary integer literal"); }
 0o{ID_CONT}*                      { emitCurrentError("invalid octal integer literal"); }
 0x{ID_CONT}*                      { emitCurrentError("invalid hexadecimal integer literal"); }
