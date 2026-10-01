@@ -98,7 +98,7 @@ static void printEscaped(FILE* stream, std::string_view text)
 }
 
 /* Единая точка диагностического вывода корректно распознанного токена. */
-static void emitToken(const char* kind, std::string_view text, int line, int column)
+static void printToken(const char* kind, std::string_view text, int line, int column)
 {
     std::printf("%d:%d  %-32s ", line, column, kind);
     printEscaped(stdout, text);
@@ -106,20 +106,20 @@ static void emitToken(const char* kind, std::string_view text, int line, int col
 }
 
 /* Числовые semantic values печатаются числами, без строковых кавычек. */
-static void emitUnsignedValue(const char* kind, unsigned long long value, int line, int column)
+static void printUnsignedValue(const char* kind, unsigned long long value, int line, int column)
 {
     std::printf("%d:%d  %-32s %llu\n", line, column, kind, value);
 }
 
-static void emitFloatValue(const char* kind, double value, int line, int column)
+static void printFloatValue(const char* kind, double value, int line, int column)
 {
     std::printf("%d:%d  %-32s %.17g\n", line, column, kind, value);
 }
 
 /* Печатает текущее совпадение yytext с координатами, сохранёнными Flex. */
-static void emitCurrentToken(const char* kind)
+static void printCurrentToken(const char* kind)
 {
-    emitToken(kind, std::string_view(yytext, static_cast<std::size_t>(yyleng)), matchLine, matchColumn);
+    printToken(kind, std::string_view(yytext, static_cast<std::size_t>(yyleng)), matchLine, matchColumn);
 }
 
 /* Регистрирует ошибку, чтобы main вернул код 2, и выводит её в stderr. */
@@ -132,10 +132,10 @@ static void reportError(std::string_view message, std::string_view text, int lin
 }
 
 /* Выводит текущее совпадение как ERROR и создаёт связанную диагностику. */
-static void emitCurrentError(std::string_view message)
+static void reportCurrentError(std::string_view message)
 {
     const std::string_view text(yytext, static_cast<std::size_t>(yyleng));
-    emitToken("ERROR", text, matchLine, matchColumn);
+    printToken("ERROR", text, matchLine, matchColumn);
     reportError(message, text, matchLine, matchColumn);
 }
 
@@ -202,11 +202,11 @@ static void validateStringContent(std::string_view text)
 static void finishAccumulated()
 {
     if (!accumulatedError.empty()) {
-        emitToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
+        printToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
         reportError(accumulatedError, accumulatedText, accumulatedLine, accumulatedColumn);
     }
     else {
-        emitToken(accumulatedKind,
+        printToken(accumulatedKind,
         accumulatedHasSemanticValue ? std::string_view(accumulatedValue) : std::string_view(accumulatedText),
         accumulatedLine, accumulatedColumn);
     }
@@ -280,7 +280,7 @@ static std::string withoutUnderscores(std::string_view text)
 }
 
 /* Вычисляет semantic value целого литерала с учётом системы счисления. */
-static void emitIntegerLiteral(const char* kind, int base, int prefixLength)
+static void handleIntegerLiteral(const char* kind, int base, int prefixLength)
 {
     const std::string_view source(yytext, static_cast<std::size_t>(yyleng));
     const std::string normalized = withoutUnderscores(source);
@@ -290,16 +290,16 @@ static void emitIntegerLiteral(const char* kind, int base, int prefixLength)
     const unsigned long long value = std::strtoull(digits, &end, base);
 
     if (end == digits || errno == ERANGE) {
-        emitToken("ERROR", source, matchLine, matchColumn);
+        printToken("ERROR", source, matchLine, matchColumn);
         reportError("integer literal is outside the supported range", source, matchLine, matchColumn);
         return;
     }
 
-    emitUnsignedValue(kind, value, matchLine, matchColumn);
+    printUnsignedValue(kind, value, matchLine, matchColumn);
 }
 
 /* Вычисляет semantic value вещественного литерала. */
-static void emitFloatingLiteral()
+static void handleFloatingLiteral()
 {
     const std::string_view source(yytext, static_cast<std::size_t>(yyleng));
     const std::string normalized = withoutUnderscores(source);
@@ -308,12 +308,12 @@ static void emitFloatingLiteral()
     const double value = std::strtod(normalized.c_str(), &end);
 
     if (end == normalized.c_str() || errno == ERANGE) {
-        emitToken("ERROR", source, matchLine, matchColumn);
+        printToken("ERROR", source, matchLine, matchColumn);
         reportError("floating-point literal is outside the supported range", source, matchLine, matchColumn);
         return;
     }
 
-    emitFloatValue("FLOAT_LITERAL", value, matchLine, matchColumn);
+    printFloatValue("FLOAT_LITERAL", value, matchLine, matchColumn);
 }
 
 /* Проверяет ASCII-ограничение escape вида \xNN в строке. */
@@ -336,7 +336,7 @@ static std::string validateCharacterLiteral(std::string_view literal)
     std::size_t closingQuote = contentStart;
     bool escaped = false;
 
-    //поиск закрывающей кавычки
+    // поиск закрывающей кавычки
     for ( ; closingQuote < literal.size(); ++closingQuote) {
         const char character = literal[closingQuote];
         if (!escaped && character == '\'') {
@@ -420,36 +420,32 @@ static std::string characterLiteralValue(std::string_view literal)
 }
 
 /* Выводит проверенный CHAR_LITERAL либо ERROR. */
-static void emitCharacterLiteral()
+static void handleCharacterLiteral()
 {
     const std::string_view text(yytext, static_cast<std::size_t>(yyleng));
     const std::string error = validateCharacterLiteral(text);
     if (error.empty()) {
-        emitToken("CHAR_LITERAL", characterLiteralValue(text), matchLine, matchColumn);
+        printToken("CHAR_LITERAL", characterLiteralValue(text), matchLine, matchColumn);
     }
     else {
-        emitToken("ERROR", text, matchLine, matchColumn);
+        printToken("ERROR", text, matchLine, matchColumn);
         reportError(error, text, matchLine, matchColumn);
     }
 }
 
 /* Все неключевые слова, включая имена типов, остаются идентификаторами. */
-static void emitIdentifier()
+static void handleIdentifier()
 {
-    emitCurrentToken("ID");
+    printCurrentToken("ID");
 }
 
 %}
-
-
 
 /* Регулярные выражения ASCII-идентификаторов */
 ID_START        [a-zA-Z_]
 ID_CONT         [a-zA-Z0-9_]
 IDENTIFIER      {ID_START}{ID_CONT}*
 SUFFIX          ([a-zA-Z]{ID_CONT}*|_{ID_CONT}+)
-
-
 
 /* Регулярные выражения числовых литералов */
 /* Суффикс отделяется не здесь, он разрешён у любого literal token, а его смысл проверяется на следующих этапах. */
@@ -459,14 +455,9 @@ OCT_NUMBER      0o_*[0-7][0-7_]*
 HEX_NUMBER      0x_*[0-9a-fA-F][0-9a-fA-F_]*
 EXPONENT        [eE][+-]?_*[0-9][0-9_]*
 
-
-
 /* Общие элементы строк и символьных литералов */
 CHAR_UNIT       ([^\'\\\r\n]|\\x[0-9a-fA-F]{2}|\\[^\r\n])
 PATTERN_WS      [ \t\v\f\r\n]
-
-
-
 
 %%
  /* ЗОНА 1 Пробельные символы */
@@ -476,66 +467,66 @@ PATTERN_WS      [ \t\v\f\r\n]
 
  /* ЗОНА 2 Ключевые слова */
 
-"_"         { emitCurrentToken("UNDERSCORE"); }
-"as"        { emitCurrentToken("AS"); }
-"async"     { emitCurrentToken("ASYNC"); }
-"await"     { emitCurrentToken("AWAIT"); }
-"break"     { emitCurrentToken("BREAK"); }
-"const"     { emitCurrentToken("CONST"); }
-"continue"  { emitCurrentToken("CONTINUE"); }
-"crate"     { emitCurrentToken("CRATE"); }
-"dyn"       { emitCurrentToken("DYN"); }
-"else"      { emitCurrentToken("ELSE"); }
-"enum"      { emitCurrentToken("ENUM"); }
-"extern"    { emitCurrentToken("EXTERN"); }
-"false"     { emitCurrentToken("FALSE"); }
-"fn"        { emitCurrentToken("FN"); }
-"for"       { emitCurrentToken("FOR"); }
-"if"        { emitCurrentToken("IF"); }
-"impl"      { emitCurrentToken("IMPL"); }
-"in"        { emitCurrentToken("IN"); }
-"let"       { emitCurrentToken("LET"); }
-"loop"      { emitCurrentToken("LOOP"); }
-"match"     { emitCurrentToken("MATCH"); }
-"mod"       { emitCurrentToken("MOD"); }
-"move"      { emitCurrentToken("MOVE"); }
-"mut"       { emitCurrentToken("MUT"); }
-"pub"       { emitCurrentToken("PUB"); }
-"ref"       { emitCurrentToken("REF"); }
-"return"    { emitCurrentToken("RETURN"); }
-"self"      { emitCurrentToken("SELF_VALUE"); }
-"Self"      { emitCurrentToken("SELF_TYPE"); }
-"static"    { emitCurrentToken("STATIC"); }
-"struct"    { emitCurrentToken("STRUCT"); }
-"super"     { emitCurrentToken("SUPER"); }
-"trait"     { emitCurrentToken("TRAIT"); }
-"true"      { emitCurrentToken("TRUE"); }
-"type"      { emitCurrentToken("TYPE"); }
-"unsafe"    { emitCurrentToken("UNSAFE"); }
-"use"       { emitCurrentToken("USE"); }
-"where"     { emitCurrentToken("WHERE"); }
-"while"     { emitCurrentToken("WHILE"); }
+"_"         { printCurrentToken("UNDERSCORE"); }
+"as"        { printCurrentToken("AS"); }
+"async"     { printCurrentToken("ASYNC"); }
+"await"     { printCurrentToken("AWAIT"); }
+"break"     { printCurrentToken("BREAK"); }
+"const"     { printCurrentToken("CONST"); }
+"continue"  { printCurrentToken("CONTINUE"); }
+"crate"     { printCurrentToken("CRATE"); }
+"dyn"       { printCurrentToken("DYN"); }
+"else"      { printCurrentToken("ELSE"); }
+"enum"      { printCurrentToken("ENUM"); }
+"extern"    { printCurrentToken("EXTERN"); }
+"false"     { printCurrentToken("FALSE"); }
+"fn"        { printCurrentToken("FN"); }
+"for"       { printCurrentToken("FOR"); }
+"if"        { printCurrentToken("IF"); }
+"impl"      { printCurrentToken("IMPL"); }
+"in"        { printCurrentToken("IN"); }
+"let"       { printCurrentToken("LET"); }
+"loop"      { printCurrentToken("LOOP"); }
+"match"     { printCurrentToken("MATCH"); }
+"mod"       { printCurrentToken("MOD"); }
+"move"      { printCurrentToken("MOVE"); }
+"mut"       { printCurrentToken("MUT"); }
+"pub"       { printCurrentToken("PUB"); }
+"ref"       { printCurrentToken("REF"); }
+"return"    { printCurrentToken("RETURN"); }
+"self"      { printCurrentToken("SELF_VALUE"); }
+"Self"      { printCurrentToken("SELF_TYPE"); }
+"static"    { printCurrentToken("STATIC"); }
+"struct"    { printCurrentToken("STRUCT"); }
+"super"     { printCurrentToken("SUPER"); }
+"trait"     { printCurrentToken("TRAIT"); }
+"true"      { printCurrentToken("TRUE"); }
+"type"      { printCurrentToken("TYPE"); }
+"unsafe"    { printCurrentToken("UNSAFE"); }
+"use"       { printCurrentToken("USE"); }
+"where"     { printCurrentToken("WHERE"); }
+"while"     { printCurrentToken("WHILE"); }
 
-"abstract"  { emitCurrentToken("ABSTRACT"); }
-"become"    { emitCurrentToken("BECOME"); }
-"box"       { emitCurrentToken("BOX"); }
-"do"        { emitCurrentToken("DO"); }
-"final"     { emitCurrentToken("FINAL"); }
-"macro"     { emitCurrentToken("MACRO"); }
-"override"  { emitCurrentToken("OVERRIDE"); }
-"priv"      { emitCurrentToken("PRIV"); }
-"try"       { emitCurrentToken("TRY"); }
-"typeof"    { emitCurrentToken("TYPEOF"); }
-"unsized"   { emitCurrentToken("UNSIZED"); }
-"virtual"   { emitCurrentToken("VIRTUAL"); }
-"yield"     { emitCurrentToken("YIELD"); }
+"abstract"  { printCurrentToken("ABSTRACT"); }
+"become"    { printCurrentToken("BECOME"); }
+"box"       { printCurrentToken("BOX"); }
+"do"        { printCurrentToken("DO"); }
+"final"     { printCurrentToken("FINAL"); }
+"macro"     { printCurrentToken("MACRO"); }
+"override"  { printCurrentToken("OVERRIDE"); }
+"priv"      { printCurrentToken("PRIV"); }
+"try"       { printCurrentToken("TRY"); }
+"typeof"    { printCurrentToken("TYPEOF"); }
+"unsized"   { printCurrentToken("UNSIZED"); }
+"virtual"   { printCurrentToken("VIRTUAL"); }
+"yield"     { printCurrentToken("YIELD"); }
 
 
  /* ЗОНА 3 Однострочные комментарии и line doc comments */
 
-"//!"[^\r\n]*               { emitCurrentToken("INNER_LINE_DOC_COMMENT"); }
-"///"([^/\r\n][^\r\n]*)?    { emitCurrentToken("OUTER_LINE_DOC_COMMENT"); }
-"//"[^\r\n]*                { emitCurrentToken("LINE_COMMENT"); }
+"//!"[^\r\n]*               { printCurrentToken("INNER_LINE_DOC_COMMENT"); }
+"///"([^/\r\n][^\r\n]*)?    { printCurrentToken("OUTER_LINE_DOC_COMMENT"); }
+"//"[^\r\n]*                { printCurrentToken("LINE_COMMENT"); }
 
 
  /* ЗОНА 4 Вложенные блочные и block doc comments */
@@ -569,7 +560,7 @@ PATTERN_WS      [ \t\v\f\r\n]
 <BLOCK_COMMENT>[*/]               { appendAccumulated(yytext, yyleng); }
 <BLOCK_COMMENT>[\r\n]            { appendAccumulated(yytext, yyleng); }
 <BLOCK_COMMENT><<EOF>>            {
-                                      emitToken("ERROR", accumulatedText,
+                                      printToken("ERROR", accumulatedText,
                                                 accumulatedLine, accumulatedColumn);
                                       reportError("block comment is not closed", accumulatedText,
                                                   accumulatedLine, accumulatedColumn);
@@ -644,7 +635,7 @@ r[#]*\"                          {
                                       BEGIN(INITIAL);
                                   }
 <STRING><<EOF>>                    {
-                                      emitToken("ERROR", accumulatedText,
+                                      printToken("ERROR", accumulatedText,
                                                 accumulatedLine, accumulatedColumn);
                                       reportError("string literal is not closed", accumulatedText,
                                                   accumulatedLine, accumulatedColumn);
@@ -698,7 +689,7 @@ r[#]*\"                          {
                                       }
                                   }
 <RAW_STRING><<EOF>>               {
-                                      emitToken("ERROR", accumulatedText,
+                                      printToken("ERROR", accumulatedText,
                                                 accumulatedLine, accumulatedColumn);
                                       reportError("raw string literal is not closed", accumulatedText,
                                                   accumulatedLine, accumulatedColumn);
@@ -709,132 +700,132 @@ r[#]*\"                          {
  /* ЗОНА 9 Символьные литералы */
 
 \'{CHAR_UNIT}\'{SUFFIX}?         {
-                                      emitCharacterLiteral();
+                                      handleCharacterLiteral();
                                   }
 
 
  /* ЗОНА 10. Raw identifiers */
 
-r#(crate|self|Self|super|_)       { emitCurrentError("this raw identifier name is reserved"); }
-r#{IDENTIFIER}                    { emitCurrentToken("RAW_IDENTIFIER"); }
+r#(crate|self|Self|super|_)       { reportCurrentError("this raw identifier name is reserved"); }
+r#{IDENTIFIER}                    { printCurrentToken("RAW_IDENTIFIER"); }
 
 
  /* ЗОНА 11 Целочисленные литералы: binary / octal / hexadecimal */
 
  // 0b101e10 - было бы 0b101 и отдельно e10
-{BIN_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("binary integer literal may not be followed by e or E"); }
-{OCT_NUMBER}[eE]{ID_CONT}*        { emitCurrentError("octal integer literal may not be followed by e or E"); }
+{BIN_NUMBER}[eE]{ID_CONT}*        { reportCurrentError("binary integer literal may not be followed by e or E"); }
+{OCT_NUMBER}[eE]{ID_CONT}*        { reportCurrentError("octal integer literal may not be followed by e or E"); }
 ({BIN_NUMBER}|{OCT_NUMBER}|{HEX_NUMBER})/\.[0-9] {
-                                      emitCurrentError("non-decimal integer literal may not be followed by a period");
+                                      reportCurrentError("non-decimal integer literal may not be followed by a period");
                                   }
 
-{BIN_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_BIN", 2, 2); }
-{OCT_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_OCT", 8, 2); }
-{HEX_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_HEX", 16, 2); }
+{BIN_NUMBER}{SUFFIX}?             { handleIntegerLiteral("INTEGER_LITERAL_BIN", 2, 2); }
+{OCT_NUMBER}{SUFFIX}?             { handleIntegerLiteral("INTEGER_LITERAL_OCT", 8, 2); }
+{HEX_NUMBER}{SUFFIX}?             { handleIntegerLiteral("INTEGER_LITERAL_HEX", 16, 2); }
 
-0b{ID_CONT}*                      { emitCurrentError("invalid binary integer literal"); }
-0o{ID_CONT}*                      { emitCurrentError("invalid octal integer literal"); }
-0x{ID_CONT}*                      { emitCurrentError("invalid hexadecimal integer literal"); }
+0b{ID_CONT}*                      { reportCurrentError("invalid binary integer literal"); }
+0o{ID_CONT}*                      { reportCurrentError("invalid octal integer literal"); }
+0x{ID_CONT}*                      { reportCurrentError("invalid hexadecimal integer literal"); }
 
 
  /* ЗОНА 12 Decimal integer и floating-point literals */
 
 {DEC_NUMBER}(\.{DEC_NUMBER})?{EXPONENT}{SUFFIX}? {
-                                      emitFloatingLiteral();
+                                      handleFloatingLiteral();
                                   }
 {DEC_NUMBER}(\.{DEC_NUMBER})?[eE][+-]?{ID_CONT}* {
-                                      emitCurrentError("floating-point exponent has no digits");
+                                      reportCurrentError("floating-point exponent has no digits");
                                   }
-{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { emitFloatingLiteral(); }
-{DEC_NUMBER}/\.\.               { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
-{DEC_NUMBER}/\.{ID_START}        { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
-{DEC_NUMBER}\.                   { emitFloatingLiteral(); }
-{DEC_NUMBER}(f32|f64)             { emitFloatingLiteral(); }
-{DEC_NUMBER}{SUFFIX}?             { emitIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
+{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { handleFloatingLiteral(); }
+{DEC_NUMBER}/\.\.               { handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
+{DEC_NUMBER}/\.{ID_START}        { handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
+{DEC_NUMBER}\.                   { handleFloatingLiteral(); }
+{DEC_NUMBER}(f32|f64)             { handleFloatingLiteral(); }
+{DEC_NUMBER}{SUFFIX}?             { handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0); }
 
  /* ЗОНА 13 Reserved prefixes и обычные идентификаторы */
 
-{IDENTIFIER}/\"                 { emitCurrentError("reserved identifier prefix before a string"); }
-{IDENTIFIER}/\'                  { emitCurrentError("reserved identifier prefix before a character quote"); }
+{IDENTIFIER}/\"                 { reportCurrentError("reserved identifier prefix before a string"); }
+{IDENTIFIER}/\'                  { reportCurrentError("reserved identifier prefix before a character quote"); }
 {IDENTIFIER}/#                   {
                                       const std::string_view text(yytext,
                                           static_cast<std::size_t>(yyleng));
                                       if (text == "r") {
-                                          emitIdentifier();
+                                          handleIdentifier();
                                       } else {
-                                          emitCurrentError("reserved identifier prefix before #");
+                                          reportCurrentError("reserved identifier prefix before #");
                                       }
                                   }
 
-{IDENTIFIER}                      { emitIdentifier(); }
+{IDENTIFIER}                      { handleIdentifier(); }
 
 
  /* ЗОНА 14 Составная пунктуация и операторы (проверяется первой) */
 
-"..="                             { emitCurrentToken("RANGE_INCLUSIVE"); }
-"<<="                             { emitCurrentToken("SHIFT_LEFT_ASSIGN"); }
-">>="                             { emitCurrentToken("SHIFT_RIGHT_ASSIGN"); }
-"!="                              { emitCurrentToken("NOT_EQUAL"); }
-"%="                              { emitCurrentToken("REMAINDER_ASSIGN"); }
-"&&"                              { emitCurrentToken("LOGICAL_AND"); }
-"&="                              { emitCurrentToken("BIT_AND_ASSIGN"); }
-"*="                              { emitCurrentToken("MULTIPLY_ASSIGN"); }
-"+="                              { emitCurrentToken("PLUS_ASSIGN"); }
-"-="                              { emitCurrentToken("MINUS_ASSIGN"); }
-"->"                              { emitCurrentToken("RIGHT_ARROW"); }
-".."                              { emitCurrentToken("RANGE"); }
-"/="                              { emitCurrentToken("DIVIDE_ASSIGN"); }
-"::"                              { emitCurrentToken("PATH_SEPARATOR"); }
-"<<"                              { emitCurrentToken("SHIFT_LEFT"); }
-"<="                              { emitCurrentToken("LESS_EQUAL"); }
-"=="                              { emitCurrentToken("EQUAL_EQUAL"); }
-"=>"                              { emitCurrentToken("FAT_ARROW"); }
-">="                              { emitCurrentToken("GREATER_EQUAL"); }
-">>"                              { emitCurrentToken("SHIFT_RIGHT"); }
-"^="                              { emitCurrentToken("BIT_XOR_ASSIGN"); }
-"|="                              { emitCurrentToken("BIT_OR_ASSIGN"); }
-"||"                              { emitCurrentToken("LOGICAL_OR"); }
+"..="                             { printCurrentToken("RANGE_INCLUSIVE"); }
+"<<="                             { printCurrentToken("SHIFT_LEFT_ASSIGN"); }
+">>="                             { printCurrentToken("SHIFT_RIGHT_ASSIGN"); }
+"!="                              { printCurrentToken("NOT_EQUAL"); }
+"%="                              { printCurrentToken("REMAINDER_ASSIGN"); }
+"&&"                              { printCurrentToken("LOGICAL_AND"); }
+"&="                              { printCurrentToken("BIT_AND_ASSIGN"); }
+"*="                              { printCurrentToken("MULTIPLY_ASSIGN"); }
+"+="                              { printCurrentToken("PLUS_ASSIGN"); }
+"-="                              { printCurrentToken("MINUS_ASSIGN"); }
+"->"                              { printCurrentToken("RIGHT_ARROW"); }
+".."                              { printCurrentToken("RANGE"); }
+"/="                              { printCurrentToken("DIVIDE_ASSIGN"); }
+"::"                              { printCurrentToken("PATH_SEPARATOR"); }
+"<<"                              { printCurrentToken("SHIFT_LEFT"); }
+"<="                              { printCurrentToken("LESS_EQUAL"); }
+"=="                              { printCurrentToken("EQUAL_EQUAL"); }
+"=>"                              { printCurrentToken("FAT_ARROW"); }
+">="                              { printCurrentToken("GREATER_EQUAL"); }
+">>"                              { printCurrentToken("SHIFT_RIGHT"); }
+"^="                              { printCurrentToken("BIT_XOR_ASSIGN"); }
+"|="                              { printCurrentToken("BIT_OR_ASSIGN"); }
+"||"                              { printCurrentToken("LOGICAL_OR"); }
 
 
  /* ЗОНА 15 Односимвольная пунктуация, операторы и delimiters */
 
-"!"                               { emitCurrentToken("BANG"); }
-"#"                               { emitCurrentToken("POUND"); }
-"$"                               { emitCurrentToken("DOLLAR"); }
-"%"                               { emitCurrentToken("REMAINDER"); }
-"&"                               { emitCurrentToken("AMPERSAND"); }
-"("                               { emitCurrentToken("LEFT_PAREN"); }
-")"                               { emitCurrentToken("RIGHT_PAREN"); }
-"*"                               { emitCurrentToken("STAR"); }
-"+"                               { emitCurrentToken("PLUS"); }
-","                               { emitCurrentToken("COMMA"); }
-"-"                               { emitCurrentToken("MINUS"); }
-"."                               { emitCurrentToken("DOT"); }
-"/"                               { emitCurrentToken("SLASH"); }
-":"                               { emitCurrentToken("COLON"); }
-";"                               { emitCurrentToken("SEMICOLON"); }
-"<"                               { emitCurrentToken("LESS"); }
-"="                               { emitCurrentToken("ASSIGN"); }
-">"                               { emitCurrentToken("GREATER"); }
-"?"                               { emitCurrentToken("QUESTION"); }
-"@"                               { emitCurrentToken("AT"); }
-"["                               { emitCurrentToken("LEFT_BRACKET"); }
-"]"                               { emitCurrentToken("RIGHT_BRACKET"); }
-"^"                               { emitCurrentToken("BIT_XOR"); }
-"{"                               { emitCurrentToken("LEFT_BRACE"); }
-"|"                               { emitCurrentToken("PIPE"); }
-"}"                               { emitCurrentToken("RIGHT_BRACE"); }
-"~"                               { emitCurrentToken("TILDE"); }
+"!"                               { printCurrentToken("BANG"); }
+"#"                               { printCurrentToken("POUND"); }
+"$"                               { printCurrentToken("DOLLAR"); }
+"%"                               { printCurrentToken("REMAINDER"); }
+"&"                               { printCurrentToken("AMPERSAND"); }
+"("                               { printCurrentToken("LEFT_PAREN"); }
+")"                               { printCurrentToken("RIGHT_PAREN"); }
+"*"                               { printCurrentToken("STAR"); }
+"+"                               { printCurrentToken("PLUS"); }
+","                               { printCurrentToken("COMMA"); }
+"-"                               { printCurrentToken("MINUS"); }
+"."                               { printCurrentToken("DOT"); }
+"/"                               { printCurrentToken("SLASH"); }
+":"                               { printCurrentToken("COLON"); }
+";"                               { printCurrentToken("SEMICOLON"); }
+"<"                               { printCurrentToken("LESS"); }
+"="                               { printCurrentToken("ASSIGN"); }
+">"                               { printCurrentToken("GREATER"); }
+"?"                               { printCurrentToken("QUESTION"); }
+"@"                               { printCurrentToken("AT"); }
+"["                               { printCurrentToken("LEFT_BRACKET"); }
+"]"                               { printCurrentToken("RIGHT_BRACKET"); }
+"^"                               { printCurrentToken("BIT_XOR"); }
+"{"                               { printCurrentToken("LEFT_BRACE"); }
+"|"                               { printCurrentToken("PIPE"); }
+"}"                               { printCurrentToken("RIGHT_BRACE"); }
+"~"                               { printCurrentToken("TILDE"); }
 
 
  /* ЗОНА 16 Неизвестные символы и конец файла */
 
-\'                                { emitCurrentError("unexpected single quote"); }
-.                                 { emitCurrentError("unknown character"); }
+\'                                { reportCurrentError("unexpected single quote"); }
+.                                 { reportCurrentError("unknown character"); }
 
  /* EOF печатается как отдельный маркер, чтобы тестировать конец ввода. */
 <<EOF>>                           {
-                                      emitToken("EOF", "", currentLine, currentColumn);
+                                      printToken("EOF", "", currentLine, currentColumn);
                                       return 0;
                                   }
 
