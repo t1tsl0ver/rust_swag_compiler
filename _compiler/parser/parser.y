@@ -1,4 +1,3 @@
-%%
 /* 
  * ОБЪЯВЛЕНИЕ ТОКЕНОВ
  */
@@ -43,6 +42,7 @@
 
 %start Program
 
+%%
 /* ПРАВИЛА ГРАММАТИКИ */
 
 /* ---------------------- PROGRAM --------------------------- */
@@ -163,14 +163,12 @@ EnumItemList: EnumItem
             | EnumItemList ',' EnumItem 
             ;
 
-EnumItem: ID 
-        | Visibility ID 
-        | ID '=' ExprWithBlock 
-        | ID '=' ExprWithoutBlock 
-        | Visibility ID '=' ExprWithBlock 
-        | Visibility ID '=' ExprWithoutBlock 
-        | Visibility ID '{' StructFieldListEmpty '}' 
-        | ID '{' StructFieldListEmpty '}' 
+EnumItem: ID
+        | Visibility ID
+        | ID '=' Expr
+        | Visibility ID '=' Expr
+        | Visibility ID '{' StructFieldListEmpty '}'
+        | ID '{' StructFieldListEmpty '}'
         ;
 
 /* ---------------------- IMPL & TRAIT ---------------------- */
@@ -197,25 +195,20 @@ TraitStmt: TRAIT ID '{' AssociatedItemListEmpty '}'
          ;
 
 /* ---------------------- CONST & MODULE -------------------- */
-ConstStmt: CONST ID ':' Type '=' ExprWithBlock ';' 
-         | CONST ID ':' Type '=' ExprWithoutBlock ';' 
-         | CONST ID ':' Type ';' 
+ConstStmt: CONST ID ':' Type '=' Expr ';'
+         | CONST ID ':' Type ';'
          ;
 
 ModuleStmt: MOD ID '{' ItemListEmpty '}' 
           ;
 
 /* ---------------------- LET STATEMENT --------------------- */
-LetStmt: LET ID '=' ExprWithBlock ';' 
-       | LET ID '=' ExprWithoutBlock ';' 
-       | LET ID ':' Type '=' ExprWithBlock ';' 
-       | LET ID ':' Type '=' ExprWithoutBlock ';' 
-       | LET MUT ID ';' 
-       | LET MUT ID ':' Type ';' 
-       | LET MUT ID '=' ExprWithBlock ';' 
-       | LET MUT ID '=' ExprWithoutBlock ';' 
-       | LET MUT ID ':' Type '=' ExprWithBlock ';' 
-       | LET MUT ID ':' Type '=' ExprWithoutBlock ';' 
+LetStmt: LET ID '=' Expr ';'
+       | LET ID ':' Type '=' Expr ';'
+       | LET MUT ID ';'
+       | LET MUT ID ':' Type ';'
+       | LET MUT ID '=' Expr ';'
+       | LET MUT ID ':' Type '=' Expr ';'
        ;
 
 /* ---------------------- STATEMENTS ------------------------ */
@@ -229,62 +222,94 @@ Stmt: ';'
     | ConstStmt 
     ;
 
-ExprStmt: ExprWithoutBlock ';' 
-        | ExprWithBlock 
+ExprStmt: StmtExpr ';'
+        | ExprWithBlock
         ;
 
 /* ---------------------- EXPRESSIONS ----------------------- */
-Expr: ExprWithoutBlock 
-    | ExprWithBlock 
+
+/* Всё, что начинается не с блока (общая часть для Expr и StmtExpr) */
+Leading: CHAR_LITERAL
+       | STRING_LITERAL
+       | RAW_STRING_LITERAL
+       | INTEGER_LITERAL_DEC
+       | INTEGER_LITERAL_BIN
+       | INTEGER_LITERAL_OCT
+       | INTEGER_LITERAL_HEX
+       | FLOAT_LITERAL
+       | TRUE
+       | FALSE
+       | PathCallExpr
+       | '[' ExprListEmpty ']'
+       | '[' Expr ';' Expr ']'
+       | CONTINUE
+       | BREAK
+       | BREAK Expr
+       | RETURN
+       | RETURN Expr
+       | RANGE
+       | RANGE Expr
+       | '!' Expr %prec '!'
+       | '*' Expr %prec USTAR
+       | '&' Expr %prec '&'
+       | '&' MUT Expr %prec '&'
+       | '-' Expr %prec UMINUS
+       ;
+
+/* Выражение в обычной позиции: блок допустим где угодно */
+Expr: Leading
+    | ExprWithBlock
+    | Expr '.' ID
+    | Expr '.' INTEGER_LITERAL_DEC
+    | Expr '[' Expr ']'
+    | Expr '?'
+    | Expr AS Type
+    | Expr RANGE
+    | Expr RANGE Expr
+    | Expr '+' Expr
+    | Expr '-' Expr
+    | Expr '*' Expr
+    | Expr '/' Expr
+    | Expr '%' Expr
+    | Expr LOGICAL_AND Expr
+    | Expr LOGICAL_OR Expr
+    | Expr EQUAL_EQUAL Expr
+    | Expr NOT_EQUAL Expr
+    | Expr '>' Expr
+    | Expr '<' Expr
+    | Expr GREATER_EQUAL Expr
+    | Expr LESS_EQUAL Expr
+    | Expr '=' Expr
     ;
 
-ExprWithoutBlock: CHAR_LITERAL 
-                | STRING_LITERAL 
-                | RAW_STRING_LITERAL 
-                | INTEGER_LITERAL_DEC 
-                | INTEGER_LITERAL_BIN 
-                | INTEGER_LITERAL_OCT 
-                | INTEGER_LITERAL_HEX 
-                | FLOAT_LITERAL 
-                | TRUE 
-                | FALSE 
-                | PathCallExpr 
-                | Expr '.' ID 
-                | Expr '.' INTEGER_LITERAL_DEC 
-                | Expr '[' Expr ']' 
-                | '[' ExprListEmpty ']' 
-                | '[' Expr ';' Expr ']' 
-                | CONTINUE 
-                | BREAK 
-                | BREAK Expr 
-                | RANGE 
-                | RANGE Expr 
-                | Expr RANGE 
-                | Expr RANGE Expr 
-                | RETURN 
-                | RETURN Expr 
-                | '!' Expr %prec '!'
-                | '*' Expr %prec USTAR
-                | '&' Expr 
-                | '&' MUT Expr 
-                | '-' Expr %prec UMINUS
-                | Expr '?' 
-                | Expr AS Type 
-                | Expr '+' Expr 
-                | Expr '-' Expr 
-                | Expr '*' Expr 
-                | Expr '/' Expr 
-                | Expr '%' Expr 
-                | Expr LOGICAL_AND Expr 
-                | Expr LOGICAL_OR Expr 
-                | Expr '=' Expr 
-                | Expr EQUAL_EQUAL Expr 
-                | Expr NOT_EQUAL Expr 
-                | Expr '>' Expr 
-                | Expr '<' Expr 
-                | Expr GREATER_EQUAL Expr 
-                | Expr LESS_EQUAL Expr 
-                ;
+/* Выражение в начале оператора: не может начинаться с блока,
+   кроме .field / .0 / ? сразу после блока */
+StmtExpr: Leading
+        | ExprWithBlock '.' ID
+        | ExprWithBlock '.' INTEGER_LITERAL_DEC
+        | ExprWithBlock '?'
+        | StmtExpr '.' ID
+        | StmtExpr '.' INTEGER_LITERAL_DEC
+        | StmtExpr '[' Expr ']'
+        | StmtExpr '?'
+        | StmtExpr AS Type
+        | StmtExpr RANGE
+        | StmtExpr RANGE Expr
+        | StmtExpr '+' Expr
+        | StmtExpr '-' Expr
+        | StmtExpr '*' Expr
+        | StmtExpr '/' Expr
+        | StmtExpr '%' Expr
+        | StmtExpr LOGICAL_AND Expr
+        | StmtExpr LOGICAL_OR Expr
+        | StmtExpr EQUAL_EQUAL Expr
+        | StmtExpr NOT_EQUAL Expr
+        | StmtExpr '>' Expr
+        | StmtExpr '<' Expr
+        | StmtExpr GREATER_EQUAL Expr
+        | StmtExpr LESS_EQUAL Expr
+        | StmtExpr '=' Expr
+        ;
 
 ExprWithBlock: BlockExpr 
              | LoopExpr 
@@ -310,10 +335,10 @@ ExprList: Expr
         ;
 
 /* ---------------------- BLOCKS & CONTROL FLOW ------------- */
-BlockExpr: '{' StmtList '}' 
-         | '{' ExprWithoutBlock '}' 
-         | '{' StmtList ExprWithoutBlock '}' 
-         | '{' '}' 
+BlockExpr: '{' StmtList '}'
+         | '{' StmtExpr '}'
+         | '{' StmtList StmtExpr '}'
+         | '{' '}'
          ;
 
 LoopExpr: InfiniteLoopExpr 
@@ -324,12 +349,10 @@ LoopExpr: InfiniteLoopExpr
 InfiniteLoopExpr: LOOP BlockExpr 
                 ;
 
-PredicateLoopExpr: WHILE ExprWithBlock BlockExpr 
-                 | WHILE ExprWithoutBlock BlockExpr 
+PredicateLoopExpr: WHILE Expr BlockExpr
                  ;
 
-IteratorLoopExpr: FOR ID IN ExprWithBlock BlockExpr 
-                | FOR ID IN ExprWithoutBlock BlockExpr 
+IteratorLoopExpr: FOR ID IN Expr BlockExpr
                 ;
 
 IfExpr: SimpleIfElseExpr 
@@ -340,22 +363,18 @@ SimpleIfElseExpr: SimpleIfExpr
                 | SimpleIfElseExpr ELSE SimpleIfExpr 
                 ;
 
-SimpleIfExpr: IF ExprWithoutBlock BlockExpr 
-            | IF ExprWithBlock BlockExpr 
+SimpleIfExpr: IF Expr BlockExpr
             ;
 
 /* ---------------------- TYPES ----------------------------- */
-Type: ID 
-    | PathCallExpr 
-    | '[' Type ';' Expr ']' 
+Type: TypePath
+    | '[' Type ';' Expr ']'
     ;
 
-/* ---------------------- STRUCT EXPRESSIONS ---------------- */
-StructExprFieldList:  StructExprField 
-                    | ',' StructExprField 
-                    | StructExprFieldList ',' StructExprField 
-                    ;
-
-StructExprField: ID ':' ExprWithoutBlock  
-               | ID ':' ExprWithBlock   
-               ;
+TypePath: ID
+        | SELF_TYPE
+        | SUPER
+        | SELF_VALUE
+        | CRATE
+        | TypePath PATH_SEPARATOR ID
+        ;
