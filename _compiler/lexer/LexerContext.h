@@ -12,8 +12,6 @@ public:
     bool hasErrors() const;
     static void printUsage(const char* executable);
 
-    void beginMatch(const char* text, int length);
-    void keepMatchedPrefix(const char* text, int length);
     void printCurrentToken(const char* kind, const char* text, int length) const;
     void reportCurrentError(std::string_view message, const char* text, int length);
     void printEndOfFile() const;
@@ -45,8 +43,7 @@ public:
     void handleFloatingLiteral(const char* text, int length);
 
 private:
-    void advancePosition(const char* text, int length);
-    void reportError(std::string_view message, std::string_view text, int line, int column);
+    void reportError(std::string_view message, std::string_view text);
     void beginAccumulated(const char* kind, const char* text, int length,
                           bool hasSemanticValue = false);
     void appendAccumulated(const char* text, int length);
@@ -56,10 +53,9 @@ private:
     void validateHexEscape(std::string_view escape);
 
     static void printEscaped(FILE* stream, std::string_view text);
-    static void printToken(const char* kind, std::string_view text, int line, int column);
-    static void printUnsignedValue(const char* kind, unsigned long long value,
-                                   int line, int column);
-    static void printFloatValue(const char* kind, double value, int line, int column);
+    static void printToken(const char* kind, std::string_view text);
+    static void printUnsignedValue(const char* kind, unsigned long long value);
+    static void printFloatValue(const char* kind, double value);
     static bool containsNonAscii(std::string_view text);
     static int countOpeningHashes(std::string_view text);
     static bool isHexDigit(char character);
@@ -69,10 +65,6 @@ private:
     static std::string validateCharacterLiteral(std::string_view literal);
     static std::string characterLiteralValue(std::string_view literal);
 
-    int currentLine = 1;
-    int currentColumn = 1;
-    int matchLine = 1;
-    int matchColumn = 1;
     bool hadErrors = false;
     const char* sourceName;
 
@@ -81,8 +73,6 @@ private:
     std::string accumulatedError;
     const char* accumulatedKind = nullptr;
     bool accumulatedHasSemanticValue = false;
-    int accumulatedLine = 1;
-    int accumulatedColumn = 1;
 
     int blockCommentDepth = 0;
     int rawHashCount = 0;

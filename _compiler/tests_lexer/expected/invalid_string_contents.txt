@@ -1,7 +1,7 @@
-1:1  ERROR
-2:1  ERROR
-3:1  ERROR
-4:1  ERROR
+ERROR
+ERROR
+ERROR
+ERROR
 a string \x escape must be in the ASCII range
 unknown string escape
 a string literal may contain only ASCII characters

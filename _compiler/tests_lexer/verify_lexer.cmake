@@ -18,6 +18,13 @@ if(NOT "${actual_exit}" STREQUAL "${EXPECTED_EXIT}")
     )
 endif()
 
+if(lexer_stdout MATCHES "(^|\n)[0-9]+:[0-9]+[ ]")
+    message(FATAL_ERROR "Lexer still prints token coordinates for ${INPUT}:\n${lexer_stdout}")
+endif()
+if(lexer_stderr MATCHES ":[0-9]+:[0-9]+: lexer error:")
+    message(FATAL_ERROR "Lexer still prints error coordinates for ${INPUT}:\n${lexer_stderr}")
+endif()
+
 set(complete_output "${lexer_stdout}\n${lexer_stderr}")
 file(STRINGS "${EXPECTATIONS}" required_fragments)
 

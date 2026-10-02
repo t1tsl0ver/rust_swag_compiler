@@ -17,32 +17,6 @@ void LexerContext::printUsage(const char* executable)
     std::printf("Prints one recognized lexical token per line.\n");
 }
 
-void LexerContext::advancePosition(const char* text, int length)
-{
-    for (int i = 0; i < length; ++i) {
-        if (text[i] == '\n') {
-            ++currentLine;
-            currentColumn = 1;
-        } else {
-            ++currentColumn;
-        }
-    }
-}
-
-void LexerContext::beginMatch(const char* text, int length)
-{
-    matchLine = currentLine;
-    matchColumn = currentColumn;
-    advancePosition(text, length);
-}
-
-void LexerContext::keepMatchedPrefix(const char* text, int length)
-{
-    currentLine = matchLine;
-    currentColumn = matchColumn;
-    advancePosition(text, length);
-}
-
 void LexerContext::printEscaped(FILE* stream, std::string_view text)
 {
     std::fputc('"', stream);
@@ -64,35 +38,32 @@ void LexerContext::printEscaped(FILE* stream, std::string_view text)
     std::fputc('"', stream);
 }
 
-void LexerContext::printToken(const char* kind, std::string_view text, int line, int column)
+void LexerContext::printToken(const char* kind, std::string_view text)
 {
-    std::printf("%d:%d  %-32s ", line, column, kind);
+    std::printf("%-32s ", kind);
     printEscaped(stdout, text);
     std::fputc('\n', stdout);
 }
 
-void LexerContext::printUnsignedValue(const char* kind, unsigned long long value,
-                                      int line, int column)
+void LexerContext::printUnsignedValue(const char* kind, unsigned long long value)
 {
-    std::printf("%d:%d  %-32s %llu\n", line, column, kind, value);
+    std::printf("%-32s %llu\n", kind, value);
 }
 
-void LexerContext::printFloatValue(const char* kind, double value, int line, int column)
+void LexerContext::printFloatValue(const char* kind, double value)
 {
-    std::printf("%d:%d  %-32s %.17g\n", line, column, kind, value);
+    std::printf("%-32s %.17g\n", kind, value);
 }
 
 void LexerContext::printCurrentToken(const char* kind, const char* text, int length) const
 {
-    printToken(kind, std::string_view(text, static_cast<std::size_t>(length)),
-               matchLine, matchColumn);
+    printToken(kind, std::string_view(text, static_cast<std::size_t>(length)));
 }
 
-void LexerContext::reportError(std::string_view message, std::string_view text,
-                               int line, int column)
+void LexerContext::reportError(std::string_view message, std::string_view text)
 {
     hadErrors = true;
-    std::fprintf(stderr, "%s:%d:%d: lexer error: %.*s: ", sourceName, line, column,
+    std::fprintf(stderr, "%s: lexer error: %.*s: ", sourceName,
                  static_cast<int>(message.size()), message.data());
     printEscaped(stderr, text);
     std::fputc('\n', stderr);
@@ -102,13 +73,13 @@ void LexerContext::reportCurrentError(std::string_view message,
                                       const char* text, int length)
 {
     const std::string_view source(text, static_cast<std::size_t>(length));
-    printToken("ERROR", source, matchLine, matchColumn);
-    reportError(message, source, matchLine, matchColumn);
+    printToken("ERROR", source);
+    reportError(message, source);
 }
 
 void LexerContext::printEndOfFile() const
 {
-    printToken("EOF", "", currentLine, currentColumn);
+    printToken("EOF", "");
 }
 
 bool LexerContext::containsNonAscii(std::string_view text)
@@ -140,8 +111,6 @@ void LexerContext::beginAccumulated(const char* kind, const char* text, int leng
     accumulatedValue.clear();
     accumulatedError.clear();
     accumulatedHasSemanticValue = hasSemanticValue;
-    accumulatedLine = matchLine;
-    accumulatedColumn = matchColumn;
 }
 
 void LexerContext::appendAccumulated(const char* text, int length)
@@ -166,13 +135,12 @@ void LexerContext::validateStringContent(std::string_view text)
 void LexerContext::finishAccumulated()
 {
     if (!accumulatedError.empty()) {
-        printToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
-        reportError(accumulatedError, accumulatedText, accumulatedLine, accumulatedColumn);
+        printToken("ERROR", accumulatedText);
+        reportError(accumulatedError, accumulatedText);
     } else {
         printToken(accumulatedKind,
                    accumulatedHasSemanticValue ? std::string_view(accumulatedValue)
-                                               : std::string_view(accumulatedText),
-                   accumulatedLine, accumulatedColumn);
+                                               : std::string_view(accumulatedText));
     }
 
     accumulatedText.clear();
@@ -184,8 +152,8 @@ void LexerContext::finishAccumulated()
 
 void LexerContext::reportUnclosedAccumulated(std::string_view message)
 {
-    printToken("ERROR", accumulatedText, accumulatedLine, accumulatedColumn);
-    reportError(message, accumulatedText, accumulatedLine, accumulatedColumn);
+    printToken("ERROR", accumulatedText);
+    reportError(message, accumulatedText);
 }
 
 void LexerContext::beginBlockComment(const char* text, int length)
@@ -289,12 +257,11 @@ void LexerContext::handleIntegerLiteral(const char* kind, int base, int prefixLe
     const unsigned long long value = std::strtoull(digits, &end, base);
 
     if (end == digits || errno == ERANGE) {
-        printToken("ERROR", source, matchLine, matchColumn);
-        reportError("integer literal is outside the supported range",
-                    source, matchLine, matchColumn);
+        printToken("ERROR", source);
+        reportError("integer literal is outside the supported range", source);
         return;
     }
-    printUnsignedValue(kind, value, matchLine, matchColumn);
+    printUnsignedValue(kind, value);
 }
 
 void LexerContext::handleFloatingLiteral(const char* text, int length)
@@ -306,12 +273,11 @@ void LexerContext::handleFloatingLiteral(const char* text, int length)
     const double value = std::strtod(normalized.c_str(), &end);
 
     if (end == normalized.c_str() || errno == ERANGE) {
-        printToken("ERROR", source, matchLine, matchColumn);
-        reportError("floating-point literal is outside the supported range",
-                    source, matchLine, matchColumn);
+        printToken("ERROR", source);
+        reportError("floating-point literal is outside the supported range", source);
         return;
     }
-    printFloatValue("FLOAT_LITERAL", value, matchLine, matchColumn);
+    printFloatValue("FLOAT_LITERAL", value);
 }
 
 void LexerContext::validateHexEscape(std::string_view escape)
@@ -497,9 +463,9 @@ void LexerContext::handleCharacterLiteral(const char* text, int length)
     const std::string_view source(text, static_cast<std::size_t>(length));
     const std::string error = validateCharacterLiteral(source);
     if (error.empty()) {
-        printToken("CHAR_LITERAL", characterLiteralValue(source), matchLine, matchColumn);
+        printToken("CHAR_LITERAL", characterLiteralValue(source));
     } else {
-        printToken("ERROR", source, matchLine, matchColumn);
-        reportError(error, source, matchLine, matchColumn);
+        printToken("ERROR", source);
+        reportError(error, source);
     }
 }

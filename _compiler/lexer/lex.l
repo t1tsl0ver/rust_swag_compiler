@@ -15,7 +15,6 @@
 #include <cstring>
 
 #define YY_DECL int yylex(LexerContext& lexer)
-#define YY_USER_ACTION do { lexer.beginMatch(yytext, yyleng); } while (0);
 %}
 
 /* Регулярные выражения ASCII-идентификаторов */
@@ -199,7 +198,6 @@ r[#]*\"                          {
                                       } else {
                                           if (usedLength < yyleng) {
                                               yyless(usedLength);
-                                              lexer.keepMatchedPrefix(yytext, usedLength);
                                           }
                                           lexer.finishRawString(yytext, usedLength);
                                           BEGIN(INITIAL);
