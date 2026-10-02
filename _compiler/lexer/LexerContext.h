@@ -4,10 +4,14 @@
 #include <string>
 #include <string_view>
 
-// Состояние одного прохода лексера и действия, вызываемые правилами Flex.
+// Методы для работы с состоянием, объявленным внутри yylex в lex.l.
 class LexerContext {
 public:
-    explicit LexerContext(const char* sourceName);
+    LexerContext(const char*& sourceName, bool& hadErrors,
+                 std::string& accumulatedText, std::string& accumulatedValue,
+                 std::string& accumulatedError, const char*& accumulatedKind,
+                 bool& accumulatedHasSemanticValue, int& blockCommentDepth,
+                 int& rawHashCount);
 
     bool hasErrors() const;
     static void printUsage(const char* executable);
@@ -65,15 +69,15 @@ private:
     static std::string validateCharacterLiteral(std::string_view literal);
     static std::string characterLiteralValue(std::string_view literal);
 
-    bool hadErrors = false;
-    const char* sourceName;
+    const char*& sourceName;
+    bool& hadErrors;
 
-    std::string accumulatedText;
-    std::string accumulatedValue;
-    std::string accumulatedError;
-    const char* accumulatedKind = nullptr;
-    bool accumulatedHasSemanticValue = false;
+    std::string& accumulatedText;
+    std::string& accumulatedValue;
+    std::string& accumulatedError;
+    const char*& accumulatedKind;
+    bool& accumulatedHasSemanticValue;
 
-    int blockCommentDepth = 0;
-    int rawHashCount = 0;
+    int& blockCommentDepth;
+    int& rawHashCount;
 };

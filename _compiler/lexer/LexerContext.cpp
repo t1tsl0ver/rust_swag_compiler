@@ -4,7 +4,18 @@
 #include <cerrno>
 #include <cstdlib>
 
-LexerContext::LexerContext(const char* name) : sourceName(name) {}
+LexerContext::LexerContext(const char*& sourceName, bool& hadErrors,
+                           std::string& accumulatedText, std::string& accumulatedValue,
+                           std::string& accumulatedError, const char*& accumulatedKind,
+                           bool& accumulatedHasSemanticValue, int& blockCommentDepth,
+                           int& rawHashCount)
+    : sourceName(sourceName), hadErrors(hadErrors),
+      accumulatedText(accumulatedText), accumulatedValue(accumulatedValue),
+      accumulatedError(accumulatedError), accumulatedKind(accumulatedKind),
+      accumulatedHasSemanticValue(accumulatedHasSemanticValue),
+      blockCommentDepth(blockCommentDepth), rawHashCount(rawHashCount)
+{
+}
 
 bool LexerContext::hasErrors() const
 {

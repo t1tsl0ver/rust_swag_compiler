@@ -14,7 +14,7 @@
 #include <cstdio>
 #include <cstring>
 
-#define YY_DECL int yylex(LexerContext& lexer)
+#define YY_DECL int yylex(const char* inputName)
 %}
 
 /* Регулярные выражения ASCII-идентификаторов */
@@ -36,6 +36,32 @@ CHAR_UNIT       ([^\'\\\r\n]|\\x[0-9a-fA-F]{2}|\\[^\r\n])
 PATTERN_WS      [ \t\v\f\r\n]
 
 %%
+    /* Состояние этого сканера находится внутри yylex, а не в файле методов. */
+    static const char* sourceName = nullptr;
+    static bool hadErrors = false;
+    static std::string accumulatedText;
+    static std::string accumulatedValue;
+    static std::string accumulatedError;
+    static const char* accumulatedKind = nullptr;
+    static bool accumulatedHasSemanticValue = false;
+    static int blockCommentDepth = 0;
+    static int rawHashCount = 0;
+
+    /* static сохраняет значения между вызовами, поэтому каждый проход начинается с очистки. */
+    sourceName = inputName;
+    hadErrors = false;
+    accumulatedText.clear();
+    accumulatedValue.clear();
+    accumulatedError.clear();
+    accumulatedKind = nullptr;
+    accumulatedHasSemanticValue = false;
+    blockCommentDepth = 0;
+    rawHashCount = 0;
+
+    LexerContext lexer(sourceName, hadErrors, accumulatedText, accumulatedValue,
+                       accumulatedError, accumulatedKind, accumulatedHasSemanticValue,
+                       blockCommentDepth, rawHashCount);
+
  /* ЗОНА 1 Пробельные символы */
 
 {PATTERN_WS}+   { /* Пробелы только разделяют токены. */ }
@@ -124,7 +150,7 @@ PATTERN_WS      [ \t\v\f\r\n]
 <BLOCK_COMMENT>[\r\n]            { lexer.appendBlockComment(yytext, yyleng); }
 <BLOCK_COMMENT><<EOF>>            {
                                       lexer.reportUnclosedAccumulated("block comment is not closed");
-                                      return 0;
+                                      return lexer.hasErrors() ? 2 : 0;
                                   }
 
 
@@ -175,7 +201,7 @@ r[#]*\"                          {
                                   }
 <STRING><<EOF>>                    {
                                       lexer.reportUnclosedAccumulated("string literal is not closed");
-                                      return 0;
+                                      return lexer.hasErrors() ? 2 : 0;
                                   }
 
 
@@ -205,7 +231,7 @@ r[#]*\"                          {
                                   }
 <RAW_STRING><<EOF>>               {
                                       lexer.reportUnclosedAccumulated("raw string literal is not closed");
-                                      return 0;
+                                      return lexer.hasErrors() ? 2 : 0;
                                   }
 
 
@@ -339,7 +365,7 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
  /* EOF печатается как отдельный маркер, чтобы тестировать конец ввода. */
 <<EOF>>                           {
                                       lexer.printEndOfFile();
-                                      return 0;
+                                      return lexer.hasErrors() ? 2 : 0;
                                   }
 
 %%
@@ -366,8 +392,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    LexerContext lexer(argv[1]);
-    yylex(lexer);
+    const int exitCode = yylex(argv[1]);
     std::fclose(yyin);
-    return lexer.hasErrors() ? 2 : 0;
+    return exitCode;
 }
