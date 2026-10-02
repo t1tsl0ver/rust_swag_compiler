@@ -712,7 +712,8 @@ r#{IDENTIFIER}                    { printCurrentToken("RAW_IDENTIFIER"); }
 
  /* ЗОНА 11 Целочисленные литералы: binary / octal / hexadecimal */
 
- // 0b101e10 - было бы 0b101 и отдельно e10
+ /* 0b101e10 - было бы 0b101 и отдельно e10*/
+ 
 {BIN_NUMBER}[eE]{ID_CONT}*        { reportCurrentError("binary integer literal may not be followed by e or E"); }
 {OCT_NUMBER}[eE]{ID_CONT}*        { reportCurrentError("octal integer literal may not be followed by e or E"); }
 ({BIN_NUMBER}|{OCT_NUMBER}|{HEX_NUMBER})/\.[0-9] {
