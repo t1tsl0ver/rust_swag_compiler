@@ -17,7 +17,11 @@ flex_target(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/lex.yy.cpp"
 )
 
-add_executable(rust_swag_lexer ${FLEX_RustSwagLexer_OUTPUTS})
+add_executable(rust_swag_lexer
+    ${FLEX_RustSwagLexer_OUTPUTS}
+    "_compiler/lexer/LexerContext.cpp"
+)
+target_include_directories(rust_swag_lexer PRIVATE "_compiler/lexer")
 
 if(MSVC)
     target_compile_options(rust_swag_lexer PRIVATE /W4)
