@@ -17,7 +17,11 @@ flex_target(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/lex.yy.cpp"
 )
 
-add_executable(rust_swag_lexer ${FLEX_RustSwagLexer_OUTPUTS})
+add_executable(rust_swag_lexer
+    ${FLEX_RustSwagLexer_OUTPUTS}
+    "_compiler/lexer/LexerContext.cpp"
+)
+target_include_directories(rust_swag_lexer PRIVATE "_compiler/lexer")
 
 if(MSVC)
     target_compile_options(rust_swag_lexer PRIVATE /W4)
@@ -58,7 +62,7 @@ if(BUILD_TESTING)
     add_lexer_test(all_tokens all_tokens.rs 0 all_tokens.txt)
     add_lexer_test(lab_requirements lab_requirements.rs 0 lab_requirements.txt)
     add_lexer_test(full_valid_program full_valid_program.rs 0 full_valid_program.txt)
-    add_lexer_test(positions positions.rs 0 positions.txt)
+    add_lexer_test(multiline_tokens multiline_tokens.rs 0 multiline_tokens.txt)
     add_lexer_test(empty_input empty_input.rs 0 empty_input.txt)
     add_lexer_test(edge_identifiers_numbers edge_identifiers_numbers.rs 0 edge_identifiers_numbers.txt)
     add_lexer_test(edge_strings_comments edge_strings_comments.rs 0 edge_strings_comments.txt)
