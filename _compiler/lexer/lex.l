@@ -37,29 +37,25 @@ PATTERN_WS      [ \t\v\f\r\n]
 
 %%
     /* Состояние этого сканера находится внутри yylex, а не в файле методов. */
-    static const char* sourceName = nullptr;
-    static bool hadErrors = false;
     static std::string accumulatedText;
     static std::string accumulatedValue;
-    static std::string accumulatedError;
     static const char* accumulatedKind = nullptr;
     static bool accumulatedHasSemanticValue = false;
+    static bool accumulatedValid = true;
     static int blockCommentDepth = 0;
     static int rawHashCount = 0;
 
     /* static сохраняет значения между вызовами, поэтому каждый проход начинается с очистки. */
-    sourceName = inputName;
-    hadErrors = false;
     accumulatedText.clear();
     accumulatedValue.clear();
-    accumulatedError.clear();
     accumulatedKind = nullptr;
     accumulatedHasSemanticValue = false;
+    accumulatedValid = true;
     blockCommentDepth = 0;
     rawHashCount = 0;
 
-    LexerContext lexer(sourceName, hadErrors, accumulatedText, accumulatedValue,
-                       accumulatedError, accumulatedKind, accumulatedHasSemanticValue,
+    LexerContext lexer(inputName, accumulatedText, accumulatedValue,
+                       accumulatedKind, accumulatedHasSemanticValue, accumulatedValid,
                        blockCommentDepth, rawHashCount);
 
  /* ЗОНА 1 Пробельные символы */
@@ -150,7 +146,7 @@ PATTERN_WS      [ \t\v\f\r\n]
 <BLOCK_COMMENT>[\r\n]            { lexer.appendBlockComment(yytext, yyleng); }
 <BLOCK_COMMENT><<EOF>>            {
                                       lexer.reportUnclosedAccumulated("block comment is not closed");
-                                      return lexer.hasErrors() ? 2 : 0;
+                                      return 0;
                                   }
 
 
@@ -201,7 +197,7 @@ r[#]*\"                          {
                                   }
 <STRING><<EOF>>                    {
                                       lexer.reportUnclosedAccumulated("string literal is not closed");
-                                      return lexer.hasErrors() ? 2 : 0;
+                                      return 0;
                                   }
 
 
@@ -231,7 +227,7 @@ r[#]*\"                          {
                                   }
 <RAW_STRING><<EOF>>               {
                                       lexer.reportUnclosedAccumulated("raw string literal is not closed");
-                                      return lexer.hasErrors() ? 2 : 0;
+                                      return 0;
                                   }
 
 
@@ -362,16 +358,10 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
 \'                                { lexer.reportCurrentError("unexpected single quote", yytext, yyleng); }
 .                                 { lexer.reportCurrentError("unknown character", yytext, yyleng); }
 
- /* EOF печатается как отдельный маркер, чтобы тестировать конец ввода. */
-<<EOF>>                           {
-                                      lexer.printEndOfFile();
-                                      return lexer.hasErrors() ? 2 : 0;
-                                  }
-
 %%
 
 /*
- * CLI-точка входа: открывает один .rs-файл, запускает Flex и преобразует накопленный флаг ошибок в документированные коды возврата 0/1/2.
+ * CLI-точка входа: открывает один .rs-файл и запускает Flex.
  */
 int main(int argc, char** argv)
 {

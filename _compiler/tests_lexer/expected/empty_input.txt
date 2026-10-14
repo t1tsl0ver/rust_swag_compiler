@@ -1,2 +1,2 @@
-EOF
 !ERROR
+!EOF

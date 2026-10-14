@@ -4,22 +4,18 @@
 #include <cerrno>
 #include <cstdlib>
 
-LexerContext::LexerContext(const char*& sourceName, bool& hadErrors,
+LexerContext::LexerContext(const char* sourceName,
                            std::string& accumulatedText, std::string& accumulatedValue,
-                           std::string& accumulatedError, const char*& accumulatedKind,
-                           bool& accumulatedHasSemanticValue, int& blockCommentDepth,
+                           const char*& accumulatedKind, bool& accumulatedHasSemanticValue,
+                           bool& accumulatedValid, int& blockCommentDepth,
                            int& rawHashCount)
-    : sourceName(sourceName), hadErrors(hadErrors),
+    : sourceName(sourceName),
       accumulatedText(accumulatedText), accumulatedValue(accumulatedValue),
-      accumulatedError(accumulatedError), accumulatedKind(accumulatedKind),
+      accumulatedKind(accumulatedKind),
       accumulatedHasSemanticValue(accumulatedHasSemanticValue),
+      accumulatedValid(accumulatedValid),
       blockCommentDepth(blockCommentDepth), rawHashCount(rawHashCount)
 {
-}
-
-bool LexerContext::hasErrors() const
-{
-    return hadErrors;
 }
 
 void LexerContext::printUsage(const char* executable)
@@ -73,7 +69,6 @@ void LexerContext::printCurrentToken(const char* kind, const char* text, int len
 
 void LexerContext::reportError(std::string_view message, std::string_view text)
 {
-    hadErrors = true;
     std::fprintf(stderr, "%s: lexer error: %.*s: ", sourceName,
                  static_cast<int>(message.size()), message.data());
     printEscaped(stderr, text);
@@ -84,13 +79,7 @@ void LexerContext::reportCurrentError(std::string_view message,
                                       const char* text, int length)
 {
     const std::string_view source(text, static_cast<std::size_t>(length));
-    printToken("ERROR", source);
     reportError(message, source);
-}
-
-void LexerContext::printEndOfFile() const
-{
-    printToken("EOF", "");
 }
 
 bool LexerContext::containsNonAscii(std::string_view text)
@@ -120,8 +109,8 @@ void LexerContext::beginAccumulated(const char* kind, const char* text, int leng
     accumulatedKind = kind;
     accumulatedText.assign(text, static_cast<std::size_t>(length));
     accumulatedValue.clear();
-    accumulatedError.clear();
     accumulatedHasSemanticValue = hasSemanticValue;
+    accumulatedValid = true;
 }
 
 void LexerContext::appendAccumulated(const char* text, int length)
@@ -129,26 +118,22 @@ void LexerContext::appendAccumulated(const char* text, int length)
     accumulatedText.append(text, static_cast<std::size_t>(length));
 }
 
-void LexerContext::markAccumulatedError(std::string_view message)
+void LexerContext::rejectAccumulated(std::string_view message, std::string_view text)
 {
-    if (accumulatedError.empty()) {
-        accumulatedError.assign(message);
-    }
+    reportError(message, text);
+    accumulatedValid = false;
 }
 
 void LexerContext::validateStringContent(std::string_view text)
 {
     if (containsNonAscii(text)) {
-        markAccumulatedError("a string literal may contain only ASCII characters");
+        rejectAccumulated("a string literal may contain only ASCII characters", text);
     }
 }
 
 void LexerContext::finishAccumulated()
 {
-    if (!accumulatedError.empty()) {
-        printToken("ERROR", accumulatedText);
-        reportError(accumulatedError, accumulatedText);
-    } else {
+    if (accumulatedValid) {
         printToken(accumulatedKind,
                    accumulatedHasSemanticValue ? std::string_view(accumulatedValue)
                                                : std::string_view(accumulatedText));
@@ -156,14 +141,13 @@ void LexerContext::finishAccumulated()
 
     accumulatedText.clear();
     accumulatedValue.clear();
-    accumulatedError.clear();
     accumulatedKind = nullptr;
     accumulatedHasSemanticValue = false;
+    accumulatedValid = true;
 }
 
 void LexerContext::reportUnclosedAccumulated(std::string_view message)
 {
-    printToken("ERROR", accumulatedText);
     reportError(message, accumulatedText);
 }
 
@@ -268,7 +252,6 @@ void LexerContext::handleIntegerLiteral(const char* kind, int base, int prefixLe
     const unsigned long long value = std::strtoull(digits, &end, base);
 
     if (end == digits || errno == ERANGE) {
-        printToken("ERROR", source);
         reportError("integer literal is outside the supported range", source);
         return;
     }
@@ -284,7 +267,6 @@ void LexerContext::handleFloatingLiteral(const char* text, int length)
     const double value = std::strtod(normalized.c_str(), &end);
 
     if (end == normalized.c_str() || errno == ERANGE) {
-        printToken("ERROR", source);
         reportError("floating-point literal is outside the supported range", source);
         return;
     }
@@ -294,7 +276,7 @@ void LexerContext::handleFloatingLiteral(const char* text, int length)
 void LexerContext::validateHexEscape(std::string_view escape)
 {
     if (parseHex(escape.substr(2)) > 0x7FU) {
-        markAccumulatedError("a string \\x escape must be in the ASCII range");
+        rejectAccumulated("a string \\x escape must be in the ASCII range", escape);
     }
 }
 
@@ -329,7 +311,7 @@ void LexerContext::appendStringError(const char* text, int length,
                                      std::string_view message)
 {
     appendAccumulated(text, length);
-    markAccumulatedError(message);
+    rejectAccumulated(message, std::string_view(text, static_cast<std::size_t>(length)));
 }
 
 void LexerContext::appendStringCrLf(const char* text, int length)
@@ -349,7 +331,7 @@ void LexerContext::beginRawString(const char* text, int length)
     beginAccumulated("RAW_STRING_LITERAL", text, length, true);
     rawHashCount = countOpeningHashes(accumulatedText);
     if (rawHashCount > 255) {
-        markAccumulatedError("raw strings may use at most 255 # characters");
+        rejectAccumulated("raw strings may use at most 255 # characters", accumulatedText);
     }
 }
 
@@ -358,7 +340,8 @@ void LexerContext::appendRawText(const char* text, int length)
     appendAccumulated(text, length);
     accumulatedValue.append(text, static_cast<std::size_t>(length));
     if (containsNonAscii(std::string_view(text, static_cast<std::size_t>(length)))) {
-        markAccumulatedError("a string literal may contain only ASCII characters");
+        rejectAccumulated("a string literal may contain only ASCII characters",
+                          std::string_view(text, static_cast<std::size_t>(length)));
     }
 }
 
@@ -372,7 +355,8 @@ void LexerContext::appendRawCarriageReturn(const char* text, int length)
 {
     appendAccumulated(text, length);
     accumulatedValue.append(text, static_cast<std::size_t>(length));
-    markAccumulatedError("carriage return is not allowed in a raw string literal");
+    rejectAccumulated("carriage return is not allowed in a raw string literal",
+                      std::string_view(text, static_cast<std::size_t>(length)));
 }
 
 int LexerContext::rawClosingPrefixLength(const char* text, int length) const
@@ -476,7 +460,6 @@ void LexerContext::handleCharacterLiteral(const char* text, int length)
     if (error.empty()) {
         printToken("CHAR_LITERAL", characterLiteralValue(source));
     } else {
-        printToken("ERROR", source);
         reportError(error, source);
     }
 }
