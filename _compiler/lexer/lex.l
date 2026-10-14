@@ -56,7 +56,7 @@ PATTERN_WS      [ \t\v\f\r\n]
 
     LexerContext lexer(inputName, accumulatedText, accumulatedValue,
                        accumulatedKind, accumulatedHasSemanticValue, accumulatedValid,
-                       blockCommentDepth, rawHashCount);
+                       rawHashCount);
 
  /* ЗОНА 1 Пробельные символы */
 
@@ -120,32 +120,27 @@ PATTERN_WS      [ \t\v\f\r\n]
 "yield"     { lexer.printCurrentToken("YIELD", yytext, yyleng); }
 
 
- /* ЗОНА 3 Однострочные комментарии и line doc comments */
+ /* ЗОНА 3 Однострочные комментарии */
 
-"//!"[^\r\n]*               { lexer.printCurrentToken("INNER_LINE_DOC_COMMENT", yytext, yyleng); }
-"///"([^/\r\n][^\r\n]*)?    { lexer.printCurrentToken("OUTER_LINE_DOC_COMMENT", yytext, yyleng); }
-"//"[^\r\n]*                { lexer.printCurrentToken("LINE_COMMENT", yytext, yyleng); }
+"//"[^\r\n]*                { /* Комментарий пропускается. */ }
 
 
- /* ЗОНА 4 Вложенные блочные и block doc comments */
+ /* ЗОНА 4 Вложенные блочные комментарии */
 
 "/*"                            {
-                                      lexer.beginBlockComment(yytext, yyleng);
+                                      blockCommentDepth = 1;
                                       BEGIN(BLOCK_COMMENT);
                                   }
-<BLOCK_COMMENT>"/*"              {
-                                      lexer.openNestedBlockComment(yytext, yyleng);
-                                  }
+<BLOCK_COMMENT>"/*"              { ++blockCommentDepth; }
 <BLOCK_COMMENT>"*/"              {
-                                      if (lexer.closeBlockComment(yytext, yyleng)) {
+                                      if (--blockCommentDepth == 0) {
                                           BEGIN(INITIAL);
                                       }
                                   }
-<BLOCK_COMMENT>[^*/\r\n]+        { lexer.appendBlockComment(yytext, yyleng); }
-<BLOCK_COMMENT>[*/]               { lexer.appendBlockComment(yytext, yyleng); }
-<BLOCK_COMMENT>[\r\n]            { lexer.appendBlockComment(yytext, yyleng); }
+<BLOCK_COMMENT>[^*/]+             { /* Содержимое комментария пропускается. */ }
+<BLOCK_COMMENT>[*/]               { /* Одиночные / и * пропускаются. */ }
 <BLOCK_COMMENT><<EOF>>            {
-                                      lexer.reportUnclosedAccumulated("block comment is not closed");
+                                      lexer.reportUnclosedBlockComment();
                                       return 0;
                                   }
 

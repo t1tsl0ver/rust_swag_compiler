@@ -7,14 +7,12 @@
 LexerContext::LexerContext(const char* sourceName,
                            std::string& accumulatedText, std::string& accumulatedValue,
                            const char*& accumulatedKind, bool& accumulatedHasSemanticValue,
-                           bool& accumulatedValid, int& blockCommentDepth,
-                           int& rawHashCount)
+                           bool& accumulatedValid, int& rawHashCount)
     : sourceName(sourceName),
       accumulatedText(accumulatedText), accumulatedValue(accumulatedValue),
       accumulatedKind(accumulatedKind),
       accumulatedHasSemanticValue(accumulatedHasSemanticValue),
-      accumulatedValid(accumulatedValid),
-      blockCommentDepth(blockCommentDepth), rawHashCount(rawHashCount)
+      accumulatedValid(accumulatedValid), rawHashCount(rawHashCount)
 {
 }
 
@@ -151,40 +149,9 @@ void LexerContext::reportUnclosedAccumulated(std::string_view message)
     reportError(message, accumulatedText);
 }
 
-void LexerContext::beginBlockComment(const char* text, int length)
+void LexerContext::reportUnclosedBlockComment() const
 {
-    beginAccumulated("BLOCK_COMMENT", text, length);
-    blockCommentDepth = 1;
-}
-
-void LexerContext::openNestedBlockComment(const char* text, int length)
-{
-    appendAccumulated(text, length);
-    ++blockCommentDepth;
-}
-
-void LexerContext::appendBlockComment(const char* text, int length)
-{
-    appendAccumulated(text, length);
-}
-
-bool LexerContext::closeBlockComment(const char* text, int length)
-{
-    appendAccumulated(text, length);
-    --blockCommentDepth;
-    if (blockCommentDepth != 0) {
-        return false;
-    }
-
-    const std::string_view comment(accumulatedText);
-    if (comment.rfind("/*!", 0) == 0) {
-        accumulatedKind = "INNER_BLOCK_DOC_COMMENT";
-    } else if (comment.rfind("/**", 0) == 0 &&
-               comment.size() > 3 && comment[3] != '*' && comment[3] != '/') {
-        accumulatedKind = "OUTER_BLOCK_DOC_COMMENT";
-    }
-    finishAccumulated();
-    return true;
+    std::fprintf(stderr, "%s: lexer error: block comment is not closed\n", sourceName);
 }
 
 bool LexerContext::isHexDigit(char character)

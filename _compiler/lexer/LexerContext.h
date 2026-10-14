@@ -10,18 +10,14 @@ public:
     LexerContext(const char* sourceName,
                  std::string& accumulatedText, std::string& accumulatedValue,
                  const char*& accumulatedKind, bool& accumulatedHasSemanticValue,
-                 bool& accumulatedValid, int& blockCommentDepth,
-                 int& rawHashCount);
+                 bool& accumulatedValid, int& rawHashCount);
 
     static void printUsage(const char* executable);
 
     void printCurrentToken(const char* kind, const char* text, int length) const;
     void reportCurrentError(std::string_view message, const char* text, int length);
 
-    void beginBlockComment(const char* text, int length);
-    void openNestedBlockComment(const char* text, int length);
-    void appendBlockComment(const char* text, int length);
-    bool closeBlockComment(const char* text, int length);
+    void reportUnclosedBlockComment() const;
 
     void beginString(const char* text, int length);
     void appendStringText(const char* text, int length);
@@ -74,6 +70,5 @@ private:
     bool& accumulatedHasSemanticValue;
     bool& accumulatedValid;
 
-    int& blockCommentDepth;
     int& rawHashCount;
 };
