@@ -1,4 +1,4 @@
 fn main() {
-    let bad_escape = "this escape is invalid: \q";
+    let bad_escape = "this escape is invalid: \q\x80";
     `
 }

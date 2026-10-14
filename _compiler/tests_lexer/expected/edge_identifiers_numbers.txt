@@ -30,5 +30,4 @@ INTEGER_LITERAL_DEC              7
 INTEGER_LITERAL_DEC              8
 FLOAT_LITERAL                    9
 FLOAT_LITERAL                    10
-EOF
 !ERROR

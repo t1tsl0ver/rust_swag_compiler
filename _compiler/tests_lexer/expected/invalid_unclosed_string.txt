@@ -1,2 +1,1 @@
-ERROR
 string literal is not closed

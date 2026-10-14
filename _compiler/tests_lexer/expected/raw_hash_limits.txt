@@ -1,4 +1,2 @@
 RAW_STRING_LITERAL
-ERROR
 raw strings may use at most 255 # characters
-EOF

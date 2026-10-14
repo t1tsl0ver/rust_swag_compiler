@@ -1,12 +1,3 @@
-ERROR
-ERROR
-ERROR
-ERROR
-ERROR
-ERROR
-ERROR
-ERROR
-ERROR
 unexpected single quote
 reserved identifier prefix before a string
 reserved identifier prefix before #

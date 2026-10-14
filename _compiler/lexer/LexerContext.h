@@ -7,23 +7,17 @@
 // Методы для работы с состоянием, объявленным внутри yylex в lex.l.
 class LexerContext {
 public:
-    LexerContext(const char*& sourceName, bool& hadErrors,
+    LexerContext(const char* sourceName,
                  std::string& accumulatedText, std::string& accumulatedValue,
-                 std::string& accumulatedError, const char*& accumulatedKind,
-                 bool& accumulatedHasSemanticValue, int& blockCommentDepth,
-                 int& rawHashCount);
+                 const char*& accumulatedKind, bool& accumulatedHasSemanticValue,
+                 bool& accumulatedValid, int& rawHashCount);
 
-    bool hasErrors() const;
     static void printUsage(const char* executable);
 
     void printCurrentToken(const char* kind, const char* text, int length) const;
     void reportCurrentError(std::string_view message, const char* text, int length);
-    void printEndOfFile() const;
 
-    void beginBlockComment(const char* text, int length);
-    void openNestedBlockComment(const char* text, int length);
-    void appendBlockComment(const char* text, int length);
-    bool closeBlockComment(const char* text, int length);
+    void reportUnclosedBlockComment() const;
 
     void beginString(const char* text, int length);
     void appendStringText(const char* text, int length);
@@ -51,7 +45,7 @@ private:
     void beginAccumulated(const char* kind, const char* text, int length,
                           bool hasSemanticValue = false);
     void appendAccumulated(const char* text, int length);
-    void markAccumulatedError(std::string_view message);
+    void rejectAccumulated(std::string_view message, std::string_view text);
     void validateStringContent(std::string_view text);
     void finishAccumulated();
     void validateHexEscape(std::string_view escape);
@@ -69,15 +63,12 @@ private:
     static std::string validateCharacterLiteral(std::string_view literal);
     static std::string characterLiteralValue(std::string_view literal);
 
-    const char*& sourceName;
-    bool& hadErrors;
-
+    const char* sourceName;
     std::string& accumulatedText;
     std::string& accumulatedValue;
-    std::string& accumulatedError;
     const char*& accumulatedKind;
     bool& accumulatedHasSemanticValue;
+    bool& accumulatedValid;
 
-    int& blockCommentDepth;
     int& rawHashCount;
 };

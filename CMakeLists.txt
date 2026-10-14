@@ -47,34 +47,34 @@ foreach(configuration Debug Release RelWithDebInfo MinSizeRel)
 endforeach()
 
 if(BUILD_TESTING)
-    function(add_lexer_test test_name input_file expected_exit expectations_file)
+    function(add_lexer_test test_name input_file expectations_file)
         add_test(
             NAME "lexer.${test_name}"
             COMMAND "${CMAKE_COMMAND}"
                 "-DLEXER=$<TARGET_FILE:rust_swag_lexer>"
                 "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/${input_file}"
-                "-DEXPECTED_EXIT=${expected_exit}"
+                "-DEXPECTED_EXIT=0"
                 "-DEXPECTATIONS=${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/expected/${expectations_file}"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/verify_lexer.cmake"
         )
     endfunction()
 
-    add_lexer_test(all_tokens all_tokens.rs 0 all_tokens.txt)
-    add_lexer_test(lab_requirements lab_requirements.rs 0 lab_requirements.txt)
-    add_lexer_test(full_valid_program full_valid_program.rs 0 full_valid_program.txt)
-    add_lexer_test(multiline_tokens multiline_tokens.rs 0 multiline_tokens.txt)
-    add_lexer_test(empty_input empty_input.rs 0 empty_input.txt)
-    add_lexer_test(edge_identifiers_numbers edge_identifiers_numbers.rs 0 edge_identifiers_numbers.txt)
-    add_lexer_test(edge_strings_comments edge_strings_comments.rs 0 edge_strings_comments.txt)
-    add_lexer_test(raw_hash_limits raw_hash_limits.rs 2 raw_hash_limits.txt)
-    add_lexer_test(invalid_escape invalid_escape.rs 2 invalid_escape.txt)
-    add_lexer_test(invalid_characters invalid_characters.rs 2 invalid_characters.txt)
-    add_lexer_test(invalid_string_contents invalid_string_contents.rs 2 invalid_string_contents.txt)
-    add_lexer_test(invalid_numeric_boundaries invalid_numeric_boundaries.rs 2 invalid_numeric_boundaries.txt)
-    add_lexer_test(invalid_unclosed_string invalid_unclosed_string.rs 2 invalid_unclosed_string.txt)
-    add_lexer_test(invalid_unclosed_comment invalid_unclosed_comment.rs 2 invalid_unclosed_comment.txt)
-    add_lexer_test(invalid_unclosed_raw_string invalid_unclosed_raw_string.rs 2 invalid_unclosed_raw_string.txt)
-    add_lexer_test(invalid_numbers invalid_numbers.rs 2 invalid_numbers.txt)
-    add_lexer_test(reserved_tokens reserved_tokens.rs 2 reserved_tokens.txt)
-    add_lexer_test(unsupported_syntax unsupported_syntax.rs 2 unsupported_syntax.txt)
+    add_lexer_test(all_tokens all_tokens.rs all_tokens.txt)
+    add_lexer_test(lab_requirements lab_requirements.rs lab_requirements.txt)
+    add_lexer_test(full_valid_program full_valid_program.rs full_valid_program.txt)
+    add_lexer_test(multiline_tokens multiline_tokens.rs multiline_tokens.txt)
+    add_lexer_test(empty_input empty_input.rs empty_input.txt)
+    add_lexer_test(edge_identifiers_numbers edge_identifiers_numbers.rs edge_identifiers_numbers.txt)
+    add_lexer_test(edge_strings_comments edge_strings_comments.rs edge_strings_comments.txt)
+    add_lexer_test(raw_hash_limits raw_hash_limits.rs raw_hash_limits.txt)
+    add_lexer_test(invalid_escape invalid_escape.rs invalid_escape.txt)
+    add_lexer_test(invalid_characters invalid_characters.rs invalid_characters.txt)
+    add_lexer_test(invalid_string_contents invalid_string_contents.rs invalid_string_contents.txt)
+    add_lexer_test(invalid_numeric_boundaries invalid_numeric_boundaries.rs invalid_numeric_boundaries.txt)
+    add_lexer_test(invalid_unclosed_string invalid_unclosed_string.rs invalid_unclosed_string.txt)
+    add_lexer_test(invalid_unclosed_comment invalid_unclosed_comment.rs invalid_unclosed_comment.txt)
+    add_lexer_test(invalid_unclosed_raw_string invalid_unclosed_raw_string.rs invalid_unclosed_raw_string.txt)
+    add_lexer_test(invalid_numbers invalid_numbers.rs invalid_numbers.txt)
+    add_lexer_test(reserved_tokens reserved_tokens.rs reserved_tokens.txt)
+    add_lexer_test(unsupported_syntax unsupported_syntax.rs unsupported_syntax.txt)
 endif()

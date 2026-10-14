@@ -1,7 +1,3 @@
-ERROR
-ERROR
-ERROR
-ERROR
 a string \x escape must be in the ASCII range
 unknown string escape
 a string literal may contain only ASCII characters
