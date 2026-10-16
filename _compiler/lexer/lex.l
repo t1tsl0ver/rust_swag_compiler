@@ -10,11 +10,9 @@
 %x BLOCK_COMMENT
 
 %{
-#include "LexerContext.h"
-#include <cstdio>
-#include <cstring>
+#include "Lexer.h"
 
-#define YY_DECL int yylex(const char* inputName)
+#define YY_DECL int yylex(LexerContext& lexer)
 %}
 
 /* Регулярные выражения ASCII-идентификаторов */
@@ -36,27 +34,6 @@ CHAR_UNIT       ([^\'\\\r\n]|\\x[0-9a-fA-F]{2}|\\[^\r\n])
 PATTERN_WS      [ \t\v\f\r\n]
 
 %%
-    /* Состояние этого сканера находится внутри yylex, а не в файле методов. */
-    static std::string accumulatedText;
-    static std::string accumulatedValue;
-    static const char* accumulatedKind = nullptr;
-    static bool accumulatedHasSemanticValue = false;
-    static bool accumulatedValid = true;
-    static int blockCommentDepth = 0;
-    static int rawHashCount = 0;
-
-    /* static сохраняет значения между вызовами, поэтому каждый проход начинается с очистки. */
-    accumulatedText.clear();
-    accumulatedValue.clear();
-    accumulatedKind = nullptr;
-    accumulatedHasSemanticValue = false;
-    accumulatedValid = true;
-    blockCommentDepth = 0;
-    rawHashCount = 0;
-
-    LexerContext lexer(inputName, accumulatedText, accumulatedValue,
-                       accumulatedKind, accumulatedHasSemanticValue, accumulatedValid,
-                       rawHashCount);
 
  /* ЗОНА 1 Пробельные символы */
 
@@ -65,59 +42,59 @@ PATTERN_WS      [ \t\v\f\r\n]
 
  /* ЗОНА 2 Ключевые слова */
 
-"_"         { lexer.printCurrentToken("UNDERSCORE", yytext, yyleng); }
-"as"        { lexer.printCurrentToken("AS", yytext, yyleng); }
-"async"     { lexer.printCurrentToken("ASYNC", yytext, yyleng); }
-"await"     { lexer.printCurrentToken("AWAIT", yytext, yyleng); }
-"break"     { lexer.printCurrentToken("BREAK", yytext, yyleng); }
-"const"     { lexer.printCurrentToken("CONST", yytext, yyleng); }
-"continue"  { lexer.printCurrentToken("CONTINUE", yytext, yyleng); }
-"crate"     { lexer.printCurrentToken("CRATE", yytext, yyleng); }
-"dyn"       { lexer.printCurrentToken("DYN", yytext, yyleng); }
-"else"      { lexer.printCurrentToken("ELSE", yytext, yyleng); }
-"enum"      { lexer.printCurrentToken("ENUM", yytext, yyleng); }
-"extern"    { lexer.printCurrentToken("EXTERN", yytext, yyleng); }
-"false"     { lexer.printCurrentToken("FALSE", yytext, yyleng); }
-"fn"        { lexer.printCurrentToken("FN", yytext, yyleng); }
-"for"       { lexer.printCurrentToken("FOR", yytext, yyleng); }
-"if"        { lexer.printCurrentToken("IF", yytext, yyleng); }
-"impl"      { lexer.printCurrentToken("IMPL", yytext, yyleng); }
-"in"        { lexer.printCurrentToken("IN", yytext, yyleng); }
-"let"       { lexer.printCurrentToken("LET", yytext, yyleng); }
-"loop"      { lexer.printCurrentToken("LOOP", yytext, yyleng); }
-"match"     { lexer.printCurrentToken("MATCH", yytext, yyleng); }
-"mod"       { lexer.printCurrentToken("MOD", yytext, yyleng); }
-"move"      { lexer.printCurrentToken("MOVE", yytext, yyleng); }
-"mut"       { lexer.printCurrentToken("MUT", yytext, yyleng); }
-"pub"       { lexer.printCurrentToken("PUB", yytext, yyleng); }
-"ref"       { lexer.printCurrentToken("REF", yytext, yyleng); }
-"return"    { lexer.printCurrentToken("RETURN", yytext, yyleng); }
-"self"      { lexer.printCurrentToken("SELF_VALUE", yytext, yyleng); }
-"Self"      { lexer.printCurrentToken("SELF_TYPE", yytext, yyleng); }
-"static"    { lexer.printCurrentToken("STATIC", yytext, yyleng); }
-"struct"    { lexer.printCurrentToken("STRUCT", yytext, yyleng); }
-"super"     { lexer.printCurrentToken("SUPER", yytext, yyleng); }
-"trait"     { lexer.printCurrentToken("TRAIT", yytext, yyleng); }
-"true"      { lexer.printCurrentToken("TRUE", yytext, yyleng); }
-"type"      { lexer.printCurrentToken("TYPE", yytext, yyleng); }
-"unsafe"    { lexer.printCurrentToken("UNSAFE", yytext, yyleng); }
-"use"       { lexer.printCurrentToken("USE", yytext, yyleng); }
-"where"     { lexer.printCurrentToken("WHERE", yytext, yyleng); }
-"while"     { lexer.printCurrentToken("WHILE", yytext, yyleng); }
+"_"         { return lexer.emitToken(TokenKind::UNDERSCORE, yytext, yyleng); }
+"as"        { return lexer.emitToken(TokenKind::AS, yytext, yyleng); }
+"async"     { return lexer.emitToken(TokenKind::ASYNC, yytext, yyleng); }
+"await"     { return lexer.emitToken(TokenKind::AWAIT, yytext, yyleng); }
+"break"     { return lexer.emitToken(TokenKind::BREAK, yytext, yyleng); }
+"const"     { return lexer.emitToken(TokenKind::CONST, yytext, yyleng); }
+"continue"  { return lexer.emitToken(TokenKind::CONTINUE, yytext, yyleng); }
+"crate"     { return lexer.emitToken(TokenKind::CRATE, yytext, yyleng); }
+"dyn"       { return lexer.emitToken(TokenKind::DYN, yytext, yyleng); }
+"else"      { return lexer.emitToken(TokenKind::ELSE, yytext, yyleng); }
+"enum"      { return lexer.emitToken(TokenKind::ENUM, yytext, yyleng); }
+"extern"    { return lexer.emitToken(TokenKind::EXTERN, yytext, yyleng); }
+"false"     { return lexer.emitToken(TokenKind::FALSE, yytext, yyleng); }
+"fn"        { return lexer.emitToken(TokenKind::FN, yytext, yyleng); }
+"for"       { return lexer.emitToken(TokenKind::FOR, yytext, yyleng); }
+"if"        { return lexer.emitToken(TokenKind::IF, yytext, yyleng); }
+"impl"      { return lexer.emitToken(TokenKind::IMPL, yytext, yyleng); }
+"in"        { return lexer.emitToken(TokenKind::IN, yytext, yyleng); }
+"let"       { return lexer.emitToken(TokenKind::LET, yytext, yyleng); }
+"loop"      { return lexer.emitToken(TokenKind::LOOP, yytext, yyleng); }
+"match"     { return lexer.emitToken(TokenKind::MATCH, yytext, yyleng); }
+"mod"       { return lexer.emitToken(TokenKind::MOD, yytext, yyleng); }
+"move"      { return lexer.emitToken(TokenKind::MOVE, yytext, yyleng); }
+"mut"       { return lexer.emitToken(TokenKind::MUT, yytext, yyleng); }
+"pub"       { return lexer.emitToken(TokenKind::PUB, yytext, yyleng); }
+"ref"       { return lexer.emitToken(TokenKind::REF, yytext, yyleng); }
+"return"    { return lexer.emitToken(TokenKind::RETURN, yytext, yyleng); }
+"self"      { return lexer.emitToken(TokenKind::SELF_VALUE, yytext, yyleng); }
+"Self"      { return lexer.emitToken(TokenKind::SELF_TYPE, yytext, yyleng); }
+"static"    { return lexer.emitToken(TokenKind::STATIC, yytext, yyleng); }
+"struct"    { return lexer.emitToken(TokenKind::STRUCT, yytext, yyleng); }
+"super"     { return lexer.emitToken(TokenKind::SUPER, yytext, yyleng); }
+"trait"     { return lexer.emitToken(TokenKind::TRAIT, yytext, yyleng); }
+"true"      { return lexer.emitToken(TokenKind::TRUE, yytext, yyleng); }
+"type"      { return lexer.emitToken(TokenKind::TYPE, yytext, yyleng); }
+"unsafe"    { return lexer.emitToken(TokenKind::UNSAFE, yytext, yyleng); }
+"use"       { return lexer.emitToken(TokenKind::USE, yytext, yyleng); }
+"where"     { return lexer.emitToken(TokenKind::WHERE, yytext, yyleng); }
+"while"     { return lexer.emitToken(TokenKind::WHILE, yytext, yyleng); }
 
-"abstract"  { lexer.printCurrentToken("ABSTRACT", yytext, yyleng); }
-"become"    { lexer.printCurrentToken("BECOME", yytext, yyleng); }
-"box"       { lexer.printCurrentToken("BOX", yytext, yyleng); }
-"do"        { lexer.printCurrentToken("DO", yytext, yyleng); }
-"final"     { lexer.printCurrentToken("FINAL", yytext, yyleng); }
-"macro"     { lexer.printCurrentToken("MACRO", yytext, yyleng); }
-"override"  { lexer.printCurrentToken("OVERRIDE", yytext, yyleng); }
-"priv"      { lexer.printCurrentToken("PRIV", yytext, yyleng); }
-"try"       { lexer.printCurrentToken("TRY", yytext, yyleng); }
-"typeof"    { lexer.printCurrentToken("TYPEOF", yytext, yyleng); }
-"unsized"   { lexer.printCurrentToken("UNSIZED", yytext, yyleng); }
-"virtual"   { lexer.printCurrentToken("VIRTUAL", yytext, yyleng); }
-"yield"     { lexer.printCurrentToken("YIELD", yytext, yyleng); }
+"abstract"  { return lexer.emitToken(TokenKind::ABSTRACT, yytext, yyleng); }
+"become"    { return lexer.emitToken(TokenKind::BECOME, yytext, yyleng); }
+"box"       { return lexer.emitToken(TokenKind::BOX, yytext, yyleng); }
+"do"        { return lexer.emitToken(TokenKind::DO, yytext, yyleng); }
+"final"     { return lexer.emitToken(TokenKind::FINAL, yytext, yyleng); }
+"macro"     { return lexer.emitToken(TokenKind::MACRO, yytext, yyleng); }
+"override"  { return lexer.emitToken(TokenKind::OVERRIDE, yytext, yyleng); }
+"priv"      { return lexer.emitToken(TokenKind::PRIV, yytext, yyleng); }
+"try"       { return lexer.emitToken(TokenKind::TRY, yytext, yyleng); }
+"typeof"    { return lexer.emitToken(TokenKind::TYPEOF, yytext, yyleng); }
+"unsized"   { return lexer.emitToken(TokenKind::UNSIZED, yytext, yyleng); }
+"virtual"   { return lexer.emitToken(TokenKind::VIRTUAL, yytext, yyleng); }
+"yield"     { return lexer.emitToken(TokenKind::YIELD, yytext, yyleng); }
 
 
  /* ЗОНА 3 Однострочные комментарии */
@@ -128,12 +105,12 @@ PATTERN_WS      [ \t\v\f\r\n]
  /* ЗОНА 4 Вложенные блочные комментарии */
 
 "/*"                            {
-                                      blockCommentDepth = 1;
+                                      lexer.beginBlockComment();
                                       BEGIN(BLOCK_COMMENT);
                                   }
-<BLOCK_COMMENT>"/*"              { ++blockCommentDepth; }
+<BLOCK_COMMENT>"/*"              { lexer.enterNestedBlockComment(); }
 <BLOCK_COMMENT>"*/"              {
-                                      if (--blockCommentDepth == 0) {
+                                      if (lexer.leaveBlockComment()) {
                                           BEGIN(INITIAL);
                                       }
                                   }
@@ -187,8 +164,9 @@ r[#]*\"                          {
                                           "carriage return is not allowed in a string literal");
                                   }
 <STRING>\"{SUFFIX}?               {
-                                      lexer.finishString(yytext, yyleng);
+                                      const int token = lexer.finishString(yytext, yyleng);
                                       BEGIN(INITIAL);
+                                      if (token != 0) return token;
                                   }
 <STRING><<EOF>>                    {
                                       lexer.reportUnclosedAccumulated("string literal is not closed");
@@ -216,8 +194,9 @@ r[#]*\"                          {
                                           if (usedLength < yyleng) {
                                               yyless(usedLength);
                                           }
-                                          lexer.finishRawString(yytext, usedLength);
+                                          const int token = lexer.finishRawString(yytext, usedLength);
                                           BEGIN(INITIAL);
+                                          if (token != 0) return token;
                                       }
                                   }
 <RAW_STRING><<EOF>>               {
@@ -229,14 +208,15 @@ r[#]*\"                          {
  /* ЗОНА 9 Символьные литералы */
 
 \'{CHAR_UNIT}\'{SUFFIX}?         {
-                                      lexer.handleCharacterLiteral(yytext, yyleng);
+                                      const int token = lexer.handleCharacterLiteral(yytext, yyleng);
+                                      if (token != 0) return token;
                                   }
 
 
  /* ЗОНА 10. Raw identifiers */
 
 r#(crate|self|Self|super|_)       { lexer.reportCurrentError("this raw identifier name is reserved", yytext, yyleng); }
-r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yytext, yyleng); }
+r#{IDENTIFIER}                    { return lexer.emitToken(TokenKind::RAW_IDENTIFIER, yytext, yyleng); }
 
 
  /* ЗОНА 11 Целочисленные литералы: binary / octal / hexadecimal */
@@ -249,9 +229,9 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
                                       lexer.reportCurrentError("non-decimal integer literal may not be followed by a period", yytext, yyleng);
                                   }
 
-{BIN_NUMBER}{SUFFIX}?             { lexer.handleIntegerLiteral("INTEGER_LITERAL_BIN", 2, 2, yytext, yyleng); }
-{OCT_NUMBER}{SUFFIX}?             { lexer.handleIntegerLiteral("INTEGER_LITERAL_OCT", 8, 2, yytext, yyleng); }
-{HEX_NUMBER}{SUFFIX}?             { lexer.handleIntegerLiteral("INTEGER_LITERAL_HEX", 16, 2, yytext, yyleng); }
+{BIN_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_BIN, 2, 2, yytext, yyleng); if (token != 0) return token; }
+{OCT_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_OCT, 8, 2, yytext, yyleng); if (token != 0) return token; }
+{HEX_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_HEX, 16, 2, yytext, yyleng); if (token != 0) return token; }
 
 0b{ID_CONT}*                      { lexer.reportCurrentError("invalid binary integer literal", yytext, yyleng); }
 0o{ID_CONT}*                      { lexer.reportCurrentError("invalid octal integer literal", yytext, yyleng); }
@@ -261,17 +241,17 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
  /* ЗОНА 12 Decimal integer и floating-point literals */
 
 {DEC_NUMBER}(\.{DEC_NUMBER})?{EXPONENT}{SUFFIX}? {
-                                      lexer.handleFloatingLiteral(yytext, yyleng);
+                                      const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token;
                                   }
 {DEC_NUMBER}(\.{DEC_NUMBER})?[eE][+-]?{ID_CONT}* {
                                       lexer.reportCurrentError("floating-point exponent has no digits", yytext, yyleng);
                                   }
-{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { lexer.handleFloatingLiteral(yytext, yyleng); }
-{DEC_NUMBER}/\.\.               { lexer.handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0, yytext, yyleng); }
-{DEC_NUMBER}/\.{ID_START}        { lexer.handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0, yytext, yyleng); }
-{DEC_NUMBER}\.                   { lexer.handleFloatingLiteral(yytext, yyleng); }
-{DEC_NUMBER}(f32|f64)             { lexer.handleFloatingLiteral(yytext, yyleng); }
-{DEC_NUMBER}{SUFFIX}?             { lexer.handleIntegerLiteral("INTEGER_LITERAL_DEC", 10, 0, yytext, yyleng); }
+{DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}/\.\.               { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}/\.{ID_START}        { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}\.                   { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}(f32|f64)             { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
 
  /* ЗОНА 13 Reserved prefixes и обычные идентификаторы */
 
@@ -281,71 +261,71 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
                                       const std::string_view text(yytext,
                                           static_cast<std::size_t>(yyleng));
                                       if (text == "r") {
-                                          lexer.printCurrentToken("ID", yytext, yyleng);
+                                          return lexer.emitToken(TokenKind::ID, yytext, yyleng);
                                       } else {
                                           lexer.reportCurrentError("reserved identifier prefix before #", yytext, yyleng);
                                       }
                                   }
 
-{IDENTIFIER}                      { lexer.printCurrentToken("ID", yytext, yyleng); }
+{IDENTIFIER}                      { return lexer.emitToken(TokenKind::ID, yytext, yyleng); }
 
 
  /* ЗОНА 14 Составная пунктуация и операторы (проверяется первой) */
 
-"..="                             { lexer.printCurrentToken("RANGE_INCLUSIVE", yytext, yyleng); }
-"<<="                             { lexer.printCurrentToken("SHIFT_LEFT_ASSIGN", yytext, yyleng); }
-">>="                             { lexer.printCurrentToken("SHIFT_RIGHT_ASSIGN", yytext, yyleng); }
-"!="                              { lexer.printCurrentToken("NOT_EQUAL", yytext, yyleng); }
-"%="                              { lexer.printCurrentToken("REMAINDER_ASSIGN", yytext, yyleng); }
-"&&"                              { lexer.printCurrentToken("LOGICAL_AND", yytext, yyleng); }
-"&="                              { lexer.printCurrentToken("BIT_AND_ASSIGN", yytext, yyleng); }
-"*="                              { lexer.printCurrentToken("MULTIPLY_ASSIGN", yytext, yyleng); }
-"+="                              { lexer.printCurrentToken("PLUS_ASSIGN", yytext, yyleng); }
-"-="                              { lexer.printCurrentToken("MINUS_ASSIGN", yytext, yyleng); }
-"->"                              { lexer.printCurrentToken("RIGHT_ARROW", yytext, yyleng); }
-".."                              { lexer.printCurrentToken("RANGE", yytext, yyleng); }
-"/="                              { lexer.printCurrentToken("DIVIDE_ASSIGN", yytext, yyleng); }
-"::"                              { lexer.printCurrentToken("PATH_SEPARATOR", yytext, yyleng); }
-"<<"                              { lexer.printCurrentToken("SHIFT_LEFT", yytext, yyleng); }
-"<="                              { lexer.printCurrentToken("LESS_EQUAL", yytext, yyleng); }
-"=="                              { lexer.printCurrentToken("EQUAL_EQUAL", yytext, yyleng); }
-"=>"                              { lexer.printCurrentToken("FAT_ARROW", yytext, yyleng); }
-">="                              { lexer.printCurrentToken("GREATER_EQUAL", yytext, yyleng); }
-">>"                              { lexer.printCurrentToken("SHIFT_RIGHT", yytext, yyleng); }
-"^="                              { lexer.printCurrentToken("BIT_XOR_ASSIGN", yytext, yyleng); }
-"|="                              { lexer.printCurrentToken("BIT_OR_ASSIGN", yytext, yyleng); }
-"||"                              { lexer.printCurrentToken("LOGICAL_OR", yytext, yyleng); }
+"..="                             { return lexer.emitToken(TokenKind::RANGE_INCLUSIVE, yytext, yyleng); }
+"<<="                             { return lexer.emitToken(TokenKind::SHIFT_LEFT_ASSIGN, yytext, yyleng); }
+">>="                             { return lexer.emitToken(TokenKind::SHIFT_RIGHT_ASSIGN, yytext, yyleng); }
+"!="                              { return lexer.emitToken(TokenKind::NOT_EQUAL, yytext, yyleng); }
+"%="                              { return lexer.emitToken(TokenKind::REMAINDER_ASSIGN, yytext, yyleng); }
+"&&"                              { return lexer.emitToken(TokenKind::LOGICAL_AND, yytext, yyleng); }
+"&="                              { return lexer.emitToken(TokenKind::BIT_AND_ASSIGN, yytext, yyleng); }
+"*="                              { return lexer.emitToken(TokenKind::MULTIPLY_ASSIGN, yytext, yyleng); }
+"+="                              { return lexer.emitToken(TokenKind::PLUS_ASSIGN, yytext, yyleng); }
+"-="                              { return lexer.emitToken(TokenKind::MINUS_ASSIGN, yytext, yyleng); }
+"->"                              { return lexer.emitToken(TokenKind::RIGHT_ARROW, yytext, yyleng); }
+".."                              { return lexer.emitToken(TokenKind::RANGE, yytext, yyleng); }
+"/="                              { return lexer.emitToken(TokenKind::DIVIDE_ASSIGN, yytext, yyleng); }
+"::"                              { return lexer.emitToken(TokenKind::PATH_SEPARATOR, yytext, yyleng); }
+"<<"                              { return lexer.emitToken(TokenKind::SHIFT_LEFT, yytext, yyleng); }
+"<="                              { return lexer.emitToken(TokenKind::LESS_EQUAL, yytext, yyleng); }
+"=="                              { return lexer.emitToken(TokenKind::EQUAL_EQUAL, yytext, yyleng); }
+"=>"                              { return lexer.emitToken(TokenKind::FAT_ARROW, yytext, yyleng); }
+">="                              { return lexer.emitToken(TokenKind::GREATER_EQUAL, yytext, yyleng); }
+">>"                              { return lexer.emitToken(TokenKind::SHIFT_RIGHT, yytext, yyleng); }
+"^="                              { return lexer.emitToken(TokenKind::BIT_XOR_ASSIGN, yytext, yyleng); }
+"|="                              { return lexer.emitToken(TokenKind::BIT_OR_ASSIGN, yytext, yyleng); }
+"||"                              { return lexer.emitToken(TokenKind::LOGICAL_OR, yytext, yyleng); }
 
 
  /* ЗОНА 15 Односимвольная пунктуация, операторы и delimiters */
 
-"!"                               { lexer.printCurrentToken("BANG", yytext, yyleng); }
-"#"                               { lexer.printCurrentToken("POUND", yytext, yyleng); }
-"$"                               { lexer.printCurrentToken("DOLLAR", yytext, yyleng); }
-"%"                               { lexer.printCurrentToken("REMAINDER", yytext, yyleng); }
-"&"                               { lexer.printCurrentToken("AMPERSAND", yytext, yyleng); }
-"("                               { lexer.printCurrentToken("LEFT_PAREN", yytext, yyleng); }
-")"                               { lexer.printCurrentToken("RIGHT_PAREN", yytext, yyleng); }
-"*"                               { lexer.printCurrentToken("STAR", yytext, yyleng); }
-"+"                               { lexer.printCurrentToken("PLUS", yytext, yyleng); }
-","                               { lexer.printCurrentToken("COMMA", yytext, yyleng); }
-"-"                               { lexer.printCurrentToken("MINUS", yytext, yyleng); }
-"."                               { lexer.printCurrentToken("DOT", yytext, yyleng); }
-"/"                               { lexer.printCurrentToken("SLASH", yytext, yyleng); }
-":"                               { lexer.printCurrentToken("COLON", yytext, yyleng); }
-";"                               { lexer.printCurrentToken("SEMICOLON", yytext, yyleng); }
-"<"                               { lexer.printCurrentToken("LESS", yytext, yyleng); }
-"="                               { lexer.printCurrentToken("ASSIGN", yytext, yyleng); }
-">"                               { lexer.printCurrentToken("GREATER", yytext, yyleng); }
-"?"                               { lexer.printCurrentToken("QUESTION", yytext, yyleng); }
-"@"                               { lexer.printCurrentToken("AT", yytext, yyleng); }
-"["                               { lexer.printCurrentToken("LEFT_BRACKET", yytext, yyleng); }
-"]"                               { lexer.printCurrentToken("RIGHT_BRACKET", yytext, yyleng); }
-"^"                               { lexer.printCurrentToken("BIT_XOR", yytext, yyleng); }
-"{"                               { lexer.printCurrentToken("LEFT_BRACE", yytext, yyleng); }
-"|"                               { lexer.printCurrentToken("PIPE", yytext, yyleng); }
-"}"                               { lexer.printCurrentToken("RIGHT_BRACE", yytext, yyleng); }
-"~"                               { lexer.printCurrentToken("TILDE", yytext, yyleng); }
+"!"                               { return lexer.emitToken(TokenKind::BANG, yytext, yyleng); }
+"#"                               { return lexer.emitToken(TokenKind::POUND, yytext, yyleng); }
+"$"                               { return lexer.emitToken(TokenKind::DOLLAR, yytext, yyleng); }
+"%"                               { return lexer.emitToken(TokenKind::REMAINDER, yytext, yyleng); }
+"&"                               { return lexer.emitToken(TokenKind::AMPERSAND, yytext, yyleng); }
+"("                               { return lexer.emitToken(TokenKind::LEFT_PAREN, yytext, yyleng); }
+")"                               { return lexer.emitToken(TokenKind::RIGHT_PAREN, yytext, yyleng); }
+"*"                               { return lexer.emitToken(TokenKind::STAR, yytext, yyleng); }
+"+"                               { return lexer.emitToken(TokenKind::PLUS, yytext, yyleng); }
+","                               { return lexer.emitToken(TokenKind::COMMA, yytext, yyleng); }
+"-"                               { return lexer.emitToken(TokenKind::MINUS, yytext, yyleng); }
+"."                               { return lexer.emitToken(TokenKind::DOT, yytext, yyleng); }
+"/"                               { return lexer.emitToken(TokenKind::SLASH, yytext, yyleng); }
+":"                               { return lexer.emitToken(TokenKind::COLON, yytext, yyleng); }
+";"                               { return lexer.emitToken(TokenKind::SEMICOLON, yytext, yyleng); }
+"<"                               { return lexer.emitToken(TokenKind::LESS, yytext, yyleng); }
+"="                               { return lexer.emitToken(TokenKind::ASSIGN, yytext, yyleng); }
+">"                               { return lexer.emitToken(TokenKind::GREATER, yytext, yyleng); }
+"?"                               { return lexer.emitToken(TokenKind::QUESTION, yytext, yyleng); }
+"@"                               { return lexer.emitToken(TokenKind::AT, yytext, yyleng); }
+"["                               { return lexer.emitToken(TokenKind::LEFT_BRACKET, yytext, yyleng); }
+"]"                               { return lexer.emitToken(TokenKind::RIGHT_BRACKET, yytext, yyleng); }
+"^"                               { return lexer.emitToken(TokenKind::BIT_XOR, yytext, yyleng); }
+"{"                               { return lexer.emitToken(TokenKind::LEFT_BRACE, yytext, yyleng); }
+"|"                               { return lexer.emitToken(TokenKind::PIPE, yytext, yyleng); }
+"}"                               { return lexer.emitToken(TokenKind::RIGHT_BRACE, yytext, yyleng); }
+"~"                               { return lexer.emitToken(TokenKind::TILDE, yytext, yyleng); }
 
 
  /* ЗОНА 16 Неизвестные символы и конец файла */
@@ -354,30 +334,3 @@ r#{IDENTIFIER}                    { lexer.printCurrentToken("RAW_IDENTIFIER", yy
 .                                 { lexer.reportCurrentError("unknown character", yytext, yyleng); }
 
 %%
-
-/*
- * CLI-точка входа: открывает один .rs-файл и запускает Flex.
- */
-int main(int argc, char** argv)
-{
-    if (argc == 2 && (std::strcmp(argv[1], "--help") == 0 ||
-                      std::strcmp(argv[1], "-h") == 0)) {
-        LexerContext::printUsage(argv[0]);
-        return 0;
-    }
-
-    if (argc != 2) {
-        LexerContext::printUsage(argv[0]);
-        return 1;
-    }
-
-    yyin = std::fopen(argv[1], "rb");
-    if (yyin == nullptr) {
-        std::fprintf(stderr, "Cannot open source file: %s\n", argv[1]);
-        return 1;
-    }
-
-    const int exitCode = yylex(argv[1]);
-    std::fclose(yyin);
-    return exitCode;
-}

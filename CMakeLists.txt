@@ -17,11 +17,11 @@ flex_target(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/lex.yy.cpp"
 )
 
-add_executable(rust_swag_lexer
+add_library(rust_swag_lexer STATIC
     ${FLEX_RustSwagLexer_OUTPUTS}
     "_compiler/lexer/LexerContext.cpp"
 )
-target_include_directories(rust_swag_lexer PRIVATE "_compiler/lexer")
+target_include_directories(rust_swag_lexer PUBLIC "_compiler/lexer")
 
 if(MSVC)
     target_compile_options(rust_swag_lexer PRIVATE /W4)
@@ -29,52 +29,20 @@ else()
     target_compile_options(rust_swag_lexer PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-if(MINGW)
-    # Produce a self-contained executable which also works when CTest does not
-    # inherit the MSYS2 runtime directories through PATH.
-    target_link_options(rust_swag_lexer PRIVATE -static)
-endif()
-
-# Keep the command from README identical for single- and multi-config generators.
-set_target_properties(rust_swag_lexer PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
-foreach(configuration Debug Release RelWithDebInfo MinSizeRel)
-    string(TOUPPER "${configuration}" configuration_upper)
-    set_target_properties(rust_swag_lexer PROPERTIES
-        "RUNTIME_OUTPUT_DIRECTORY_${configuration_upper}" "${CMAKE_BINARY_DIR}/bin"
-    )
-endforeach()
-
 if(BUILD_TESTING)
-    function(add_lexer_test test_name input_file expectations_file)
-        add_test(
-            NAME "lexer.${test_name}"
-            COMMAND "${CMAKE_COMMAND}"
-                "-DLEXER=$<TARGET_FILE:rust_swag_lexer>"
-                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/${input_file}"
-                "-DEXPECTED_EXIT=0"
-                "-DEXPECTATIONS=${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/expected/${expectations_file}"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/verify_lexer.cmake"
-        )
-    endfunction()
+    add_executable(lexer_stream_test "_compiler/tests_lexer/stream_test.cpp")
+    target_link_libraries(lexer_stream_test PRIVATE rust_swag_lexer)
+    if(MINGW)
+        target_link_options(lexer_stream_test PRIVATE -static)
+    endif()
 
-    add_lexer_test(all_tokens all_tokens.rs all_tokens.txt)
-    add_lexer_test(lab_requirements lab_requirements.rs lab_requirements.txt)
-    add_lexer_test(full_valid_program full_valid_program.rs full_valid_program.txt)
-    add_lexer_test(multiline_tokens multiline_tokens.rs multiline_tokens.txt)
-    add_lexer_test(empty_input empty_input.rs empty_input.txt)
-    add_lexer_test(edge_identifiers_numbers edge_identifiers_numbers.rs edge_identifiers_numbers.txt)
-    add_lexer_test(edge_strings_comments edge_strings_comments.rs edge_strings_comments.txt)
-    add_lexer_test(raw_hash_limits raw_hash_limits.rs raw_hash_limits.txt)
-    add_lexer_test(invalid_escape invalid_escape.rs invalid_escape.txt)
-    add_lexer_test(invalid_characters invalid_characters.rs invalid_characters.txt)
-    add_lexer_test(invalid_string_contents invalid_string_contents.rs invalid_string_contents.txt)
-    add_lexer_test(invalid_numeric_boundaries invalid_numeric_boundaries.rs invalid_numeric_boundaries.txt)
-    add_lexer_test(invalid_unclosed_string invalid_unclosed_string.rs invalid_unclosed_string.txt)
-    add_lexer_test(invalid_unclosed_comment invalid_unclosed_comment.rs invalid_unclosed_comment.txt)
-    add_lexer_test(invalid_unclosed_raw_string invalid_unclosed_raw_string.rs invalid_unclosed_raw_string.txt)
-    add_lexer_test(invalid_numbers invalid_numbers.rs invalid_numbers.txt)
-    add_lexer_test(reserved_tokens reserved_tokens.rs reserved_tokens.txt)
-    add_lexer_test(unsupported_syntax unsupported_syntax.rs unsupported_syntax.txt)
+    add_test(NAME lexer.valid_stream
+        COMMAND lexer_stream_test valid
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/stream_valid.rs")
+    add_test(NAME lexer.error_recovery
+        COMMAND lexer_stream_test errors
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/stream_errors.rs")
+    add_test(NAME lexer.unclosed_comment
+        COMMAND lexer_stream_test unclosed
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_lexer/stream_unclosed.rs")
 endif()
