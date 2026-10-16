@@ -259,76 +259,38 @@ ExprWithoutBlock
     /* арифметика */
     | ExprWithoutBlock "+" ExprWithoutBlock
     | ExprWithoutBlock "+" ExprWithBlock
-    | ExprWithBlock    "+" ExprWithoutBlock
-    | ExprWithBlock    "+" ExprWithBlock
-
     | ExprWithoutBlock "-" ExprWithoutBlock
     | ExprWithoutBlock "-" ExprWithBlock
-    | ExprWithBlock    "-" ExprWithoutBlock
-    | ExprWithBlock    "-" ExprWithBlock
-
     | ExprWithoutBlock "/" ExprWithoutBlock
     | ExprWithoutBlock "/" ExprWithBlock
-    | ExprWithBlock    "/" ExprWithoutBlock
-    | ExprWithBlock    "/" ExprWithBlock
-
     | ExprWithoutBlock "*" ExprWithoutBlock
     | ExprWithoutBlock "*" ExprWithBlock
-    | ExprWithBlock    "*" ExprWithoutBlock
-    | ExprWithBlock    "*" ExprWithBlock
-
     | ExprWithoutBlock "%" ExprWithoutBlock
     | ExprWithoutBlock "%" ExprWithBlock
-    | ExprWithBlock    "%" ExprWithoutBlock
-    | ExprWithBlock    "%" ExprWithBlock
 
     /* логика */
     | ExprWithoutBlock "&&" ExprWithoutBlock
     | ExprWithoutBlock "&&" ExprWithBlock
-    | ExprWithBlock    "&&" ExprWithoutBlock
-    | ExprWithBlock    "&&" ExprWithBlock
-
     | ExprWithoutBlock "||" ExprWithoutBlock
     | ExprWithoutBlock "||" ExprWithBlock
-    | ExprWithBlock    "||" ExprWithoutBlock
-    | ExprWithBlock    "||" ExprWithBlock
 
     /* присваивание */
     | ExprWithoutBlock "=" ExprWithoutBlock
     | ExprWithoutBlock "=" ExprWithBlock
-    | ExprWithBlock    "=" ExprWithoutBlock
-    | ExprWithBlock    "=" ExprWithBlock
 
     /* сравнения */
     | ExprWithoutBlock "==" ExprWithoutBlock
     | ExprWithoutBlock "==" ExprWithBlock
-    | ExprWithBlock    "==" ExprWithoutBlock
-    | ExprWithBlock    "==" ExprWithBlock
-
     | ExprWithoutBlock "!=" ExprWithoutBlock
     | ExprWithoutBlock "!=" ExprWithBlock
-    | ExprWithBlock    "!=" ExprWithoutBlock
-    | ExprWithBlock    "!=" ExprWithBlock
-
     | ExprWithoutBlock ">" ExprWithoutBlock
     | ExprWithoutBlock ">" ExprWithBlock
-    | ExprWithBlock    ">" ExprWithoutBlock
-    | ExprWithBlock    ">" ExprWithBlock
-
     | ExprWithoutBlock "<" ExprWithoutBlock
     | ExprWithoutBlock "<" ExprWithBlock
-    | ExprWithBlock    "<" ExprWithoutBlock
-    | ExprWithBlock    "<" ExprWithBlock
-
     | ExprWithoutBlock ">=" ExprWithoutBlock
     | ExprWithoutBlock ">=" ExprWithBlock
-    | ExprWithBlock    ">=" ExprWithoutBlock
-    | ExprWithBlock    ">=" ExprWithBlock
-
     | ExprWithoutBlock "<=" ExprWithoutBlock
     | ExprWithoutBlock "<=" ExprWithBlock
-    | ExprWithBlock    "<=" ExprWithoutBlock
-    | ExprWithBlock    "<=" ExprWithBlock
 
     /* унарные */
     | "-" ExprWithoutBlock %prec UMINUS
@@ -342,7 +304,6 @@ ExprWithoutBlock
     | "&" MUT ExprWithoutBlock
     | "&" MUT ExprWithBlock
     | ExprWithoutBlock "?"
-    | ExprWithBlock    "?"
 
     /* массивы */
     | "[" ExprListEmpty "]"
@@ -354,8 +315,6 @@ ExprWithoutBlock
     /* индексация */
     | ExprWithoutBlock "[" ExprWithoutBlock "]"
     | ExprWithoutBlock "[" ExprWithBlock    "]"
-    | ExprWithBlock    "[" ExprWithoutBlock "]"
-    | ExprWithBlock    "[" ExprWithBlock    "]"
 
     /* управление */
     | CONTINUE
@@ -371,19 +330,13 @@ ExprWithoutBlock
     | ".." ExprWithoutBlock
     | ".." ExprWithBlock
     | ExprWithoutBlock ".."
-    | ExprWithBlock    ".."
     | ExprWithoutBlock ".." ExprWithoutBlock
     | ExprWithoutBlock ".." ExprWithBlock
-    | ExprWithBlock    ".." ExprWithoutBlock
-    | ExprWithBlock    ".." ExprWithBlock
 
     /* доступ к полям / методам / кортежам */
     | ExprWithoutBlock "." IntLiteral
-    | ExprWithBlock    "." IntLiteral
     | ExprWithoutBlock "." ID
-    | ExprWithBlock    "." ID
     | ExprWithoutBlock "." ID "(" ExprListEmpty ")"
-    | ExprWithBlock    "." ID "(" ExprListEmpty ")"
 
     /* пути и вызовы */
     | PathCallExpr
@@ -395,7 +348,6 @@ ExprWithoutBlock
     /* скобки и приведение типа */
     | "(" ExprWithBlock    ")"
     | "(" ExprWithoutBlock ")"
-    | ExprWithBlock    AS Type
     | ExprWithoutBlock AS Type
 
 PathCallExpr : ID
