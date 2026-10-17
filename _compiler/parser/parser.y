@@ -162,7 +162,6 @@ TupleFieldList : Type
 EnumStmt : ENUM ID "{" EnumItemListEmpty "}"
 
 EnumItemListEmpty : /* empty */
-                  | ","
                   | EnumItemList
                   | EnumItemList ","
 
@@ -343,7 +342,7 @@ ExprWithoutBlock
     | PathCallExpr "(" ExprListEmpty ")"
 
     /* создание структуры */
-    | ExprWithoutBlock "{" StructExprFieldList "}"
+    | ExprWithoutBlock "{" StructExprFieldListEmpty "}"
 
     /* скобки и приведение типа */
     | "(" ExprWithBlock    ")"
@@ -356,8 +355,11 @@ PathCallExpr : ID
              | CRATE
              | PathCallExpr "::" ID
 
+StructExprFieldListEmpty : /* empty */
+                         | StructExprFieldList
+                         | StructExprFieldList ","
+
 StructExprFieldList : StructExprField
-                    | "," StructExprField
                     | StructExprFieldList "," StructExprField
 
 StructExprField : ID ":" ExprWithoutBlock
