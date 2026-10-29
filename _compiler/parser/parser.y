@@ -356,6 +356,104 @@ ExprWithoutBlock
     | "(" StructExpr ")"
     | ExprWithoutBlock AS Type
 
+/* EXPRESSION БЕЗ STRUCT-ЛИТЕРАЛА (для условий if/while/for) */
+
+ExprNoStruct
+    : Literal
+
+    /* арифметика */
+    | ExprNoStruct "+" ExprNoStruct
+    | ExprNoStruct "+" ExprWithBlock
+    | ExprNoStruct "-" ExprNoStruct
+    | ExprNoStruct "-" ExprWithBlock
+    | ExprNoStruct "/" ExprNoStruct
+    | ExprNoStruct "/" ExprWithBlock
+    | ExprNoStruct "*" ExprNoStruct
+    | ExprNoStruct "*" ExprWithBlock
+    | ExprNoStruct "%" ExprNoStruct
+    | ExprNoStruct "%" ExprWithBlock
+
+    /* логика */
+    | ExprNoStruct "&&" ExprNoStruct
+    | ExprNoStruct "&&" ExprWithBlock
+    | ExprNoStruct "||" ExprNoStruct
+    | ExprNoStruct "||" ExprWithBlock
+
+    /* присваивание */
+    | ExprNoStruct "=" ExprNoStruct
+    | ExprNoStruct "=" ExprWithBlock
+
+    /* сравнения */
+    | ExprNoStruct "==" ExprNoStruct
+    | ExprNoStruct "==" ExprWithBlock
+    | ExprNoStruct "!=" ExprNoStruct
+    | ExprNoStruct "!=" ExprWithBlock
+    | ExprNoStruct ">" ExprNoStruct
+    | ExprNoStruct ">" ExprWithBlock
+    | ExprNoStruct "<" ExprNoStruct
+    | ExprNoStruct "<" ExprWithBlock
+    | ExprNoStruct ">=" ExprNoStruct
+    | ExprNoStruct ">=" ExprWithBlock
+    | ExprNoStruct "<=" ExprNoStruct
+    | ExprNoStruct "<=" ExprWithBlock
+
+    /* унарные */
+    | "-" ExprNoStruct %prec UMINUS
+    | "-" ExprWithBlock    %prec UMINUS
+    | "!" ExprNoStruct
+    | "!" ExprWithBlock
+    | "*" ExprNoStruct %prec USTAR
+    | "*" ExprWithBlock    %prec USTAR
+    | "&" ExprNoStruct
+    | "&" ExprWithBlock
+    | "&" MUT ExprNoStruct
+    | "&" MUT ExprWithBlock
+    | ExprNoStruct "?"
+
+    /* массивы */
+    | "[" ExprListEmpty "]"
+    | "[" ExprWithoutBlock ";" ExprWithoutBlock "]"
+    | "[" ExprWithoutBlock ";" ExprWithBlock    "]"
+    | "[" ExprWithBlock    ";" ExprWithoutBlock "]"
+    | "[" ExprWithBlock    ";" ExprWithBlock    "]"
+
+    /* индексация */
+    | ExprNoStruct "[" ExprWithoutBlock "]"
+    | ExprNoStruct "[" ExprWithBlock    "]"
+
+    /* управление */
+    | CONTINUE
+    | BREAK
+    | BREAK ExprNoStruct
+    | BREAK ExprWithBlock
+    | RETURN
+    | RETURN ExprNoStruct
+    | RETURN ExprWithBlock
+
+    /* диапазоны */
+    | ".."
+    | ".." ExprNoStruct
+    | ".." ExprWithBlock
+    | ExprNoStruct ".."
+    | ExprNoStruct ".." ExprNoStruct
+    | ExprNoStruct ".." ExprWithBlock
+
+    /* доступ к полям / методам / кортежам */
+    | ExprNoStruct "." INTEGER_LITERAL
+    | ExprNoStruct "." ID
+    | ExprNoStruct "." ID "(" ExprListEmpty ")"
+
+    /* пути и вызовы */
+    | Path
+    | Path "(" ExprListEmpty ")"
+
+    /* скобки и приведение типа (внутри скобок — полный ExprWithoutBlock и StructExpr) */
+    | "(" ExprWithBlock    ")"
+    | "(" ExprWithoutBlock ")"
+    | "(" StructExpr ")"
+    | ExprNoStruct AS Type
+    ;
+
 StructExpr : Path "{" StructExprFieldListEmpty "}"
            ;
 
@@ -401,11 +499,11 @@ LoopExpr : InfiniteLoopExpr
 
 InfiniteLoopExpr : LOOP BlockExpr
 
-PredicateLoopExpr : WHILE ExprWithBlock    BlockExpr
-                  | WHILE ExprWithoutBlock BlockExpr
+PredicateLoopExpr : WHILE ExprWithBlock BlockExpr
+                  | WHILE ExprNoStruct  BlockExpr
 
-IteratorLoopExpr : FOR ID IN ExprWithBlock    BlockExpr
-                 | FOR ID IN ExprWithoutBlock BlockExpr
+IteratorLoopExpr : FOR ID IN ExprWithBlock BlockExpr
+                 | FOR ID IN ExprNoStruct  BlockExpr
 
 IfExpr : SimpleIfElseExpr
        | SimpleIfElseExpr ELSE BlockExpr
@@ -413,8 +511,8 @@ IfExpr : SimpleIfElseExpr
 SimpleIfElseExpr : SimpleIfExpr
                  | SimpleIfElseExpr ELSE SimpleIfExpr
 
-SimpleIfExpr : IF ExprWithoutBlock BlockExpr
-             | IF ExprWithBlock    BlockExpr
+SimpleIfExpr : IF ExprNoStruct  BlockExpr
+             | IF ExprWithBlock BlockExpr
 
 /* TYPE */
 
