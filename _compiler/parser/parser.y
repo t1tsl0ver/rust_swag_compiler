@@ -172,8 +172,10 @@ EnumItem : ID
          | Visibility ID
          | ID "=" ExprWithBlock
          | ID "=" ExprWithoutBlock
+         | ID "=" StructExpr
          | Visibility ID "=" ExprWithBlock
          | Visibility ID "=" ExprWithoutBlock
+         | Visibility ID "=" StructExpr
          | Visibility ID "{" StructFieldListEmpty "}"
          | ID "{" StructFieldListEmpty "}"
 
@@ -202,6 +204,7 @@ TraitStmt : TRAIT ID "{" AssociatedItemListEmpty "}"
 
 ConstStmt : CONST ID ":" Type "=" ExprWithBlock ";"
           | CONST ID ":" Type "=" ExprWithoutBlock ";"
+          | CONST ID ":" Type "=" StructExpr ";"
           | CONST ID ":" Type ";"
 
 /* MODULE */
@@ -212,18 +215,23 @@ ModuleStmt : MOD ID "{" ItemListEmpty "}"
 
 LetStmt : LET ID "=" ExprWithBlock ";"
         | LET ID "=" ExprWithoutBlock ";"
+        | LET ID "=" StructExpr ";"
         | LET ID ":" Type "=" ExprWithBlock ";"
         | LET ID ":" Type "=" ExprWithoutBlock ";"
+        | LET ID ":" Type "=" StructExpr ";"
         | LET MUT ID ";"
         | LET MUT ID ":" Type ";"
         | LET MUT ID "=" ExprWithBlock ";"
         | LET MUT ID "=" ExprWithoutBlock ";"
+        | LET MUT ID "=" StructExpr ";"
         | LET MUT ID ":" Type "=" ExprWithBlock ";"
         | LET MUT ID ":" Type "=" ExprWithoutBlock ";"
+        | LET MUT ID ":" Type "=" StructExpr ";"
 
 /* EXPR STMT */
 
 ExprStmt : ExprWithoutBlock ";"
+         | StructExpr ";"
          | ExprWithBlock
 
 /* EXPR LIST */
@@ -234,8 +242,10 @@ ExprListEmpty : /* empty */
 
 ExprList : ExprWithBlock
          | ExprWithoutBlock
+         | StructExpr
          | ExprList "," ExprWithBlock
          | ExprList "," ExprWithoutBlock
+         | ExprList "," StructExpr
 
 /* LITERALS */
 
@@ -317,9 +327,11 @@ ExprWithoutBlock
     | BREAK
     | BREAK ExprWithoutBlock
     | BREAK ExprWithBlock
+    | BREAK StructExpr
     | RETURN
     | RETURN ExprWithoutBlock
     | RETURN ExprWithBlock
+    | RETURN StructExpr
 
     /* диапазоны */
     | ".."
@@ -335,16 +347,17 @@ ExprWithoutBlock
     | ExprWithoutBlock "." ID "(" ExprListEmpty ")"
 
     /* пути и вызовы */
-    | PathCallExpr
-    | PathCallExpr "(" ExprListEmpty ")"
-
-    /* создание структуры */
-    | TypePath "{" StructExprFieldListEmpty "}"
+    | Path
+    | Path "(" ExprListEmpty ")"
 
     /* скобки и приведение типа */
     | "(" ExprWithBlock    ")"
     | "(" ExprWithoutBlock ")"
+    | "(" StructExpr ")"
     | ExprWithoutBlock AS Type
+
+StructExpr : Path "{" StructExprFieldListEmpty "}"
+           ;
 
 PathPrefix : SUPER
            | CRATE
@@ -358,11 +371,9 @@ TypePath : ID
          | TypePath "::" ID
          ;
 
-PathCallExpr : ID
-             | SUPER
-             | SELF_VALUE
-             | CRATE
-             | PathCallExpr "::" ID
+Path : TypePath
+     | SELF_VALUE
+     ;
 
 StructExprFieldListEmpty : /* empty */
                          | StructExprFieldList
@@ -373,6 +384,7 @@ StructExprFieldList : StructExprField
 
 StructExprField : ID ":" ExprWithoutBlock
                 | ID ":" ExprWithBlock
+                | ID ":" StructExpr
 
 ExprWithBlock : BlockExpr
               | LoopExpr
