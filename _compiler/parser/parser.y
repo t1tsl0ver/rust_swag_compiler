@@ -1,13 +1,13 @@
 /* ТОКЕНЫ */
 
 /* --- Ключевые слова --- */
-%token AS BREAK CONST CONTINUE CRATE ELSE ENUM FALSE FN FOR IF IMPL IN
-%token LET LOOP MOD MUT PUB RETURN SELF_VALUE STRUCT SUPER TRAIT TRUE WHILE
+%token AS BREAK CONST CONTINUE CRATE ELSE ENUM FN FOR IF IMPL IN
+%token LET LOOP MOD MUT PUB RETURN SELF_TYPE SELF_VALUE STRUCT SUPER TRAIT WHILE
 
 /* --- Идентификаторы и литералы --- */
 %token ID
-%token INTEGER_LITERAL_DEC INTEGER_LITERAL_BIN INTEGER_LITERAL_OCT INTEGER_LITERAL_HEX
-%token FLOAT_LITERAL STRING_LITERAL RAW_STRING_LITERAL CHAR_LITERAL
+%token INTEGER_LITERAL FLOAT_LITERAL BOOLEAN_LITERAL
+%token STRING_LITERAL RAW_STRING_LITERAL CHAR_LITERAL
 
 /* --- Пунктуация и операторы: символические имена + читаемые алиасы --- */
 %token LEFT_PAREN     "("
@@ -180,7 +180,7 @@ EnumItem : ID
 /* IMPL */
 
 ImplStmt : IMPL Type "{" AssociatedItemListEmpty "}"
-         | IMPL PathCallExpr FOR Type "{" AssociatedItemListEmpty "}"
+         | IMPL TypePath FOR Type "{" AssociatedItemListEmpty "}"
 
 AssociatedItemListEmpty : /* empty */
                         | AssociatedItemList
@@ -237,23 +237,20 @@ ExprList : ExprWithBlock
          | ExprList "," ExprWithBlock
          | ExprList "," ExprWithoutBlock
 
-/* INT LITERAL */
+/* LITERALS */
 
-IntLiteral : INTEGER_LITERAL_DEC
-           | INTEGER_LITERAL_BIN
-           | INTEGER_LITERAL_OCT
-           | INTEGER_LITERAL_HEX
+Literal : INTEGER_LITERAL
+        | FLOAT_LITERAL
+        | BOOLEAN_LITERAL
+        | STRING_LITERAL
+        | RAW_STRING_LITERAL
+        | CHAR_LITERAL
+        ;
 
 /* EXPRESSIONS */
 
 ExprWithoutBlock
-    : CHAR_LITERAL
-    | STRING_LITERAL
-    | RAW_STRING_LITERAL
-    | IntLiteral
-    | FLOAT_LITERAL
-    | TRUE
-    | FALSE
+    : Literal
 
     /* арифметика */
     | ExprWithoutBlock "+" ExprWithoutBlock
@@ -333,7 +330,7 @@ ExprWithoutBlock
     | ExprWithoutBlock ".." ExprWithBlock
 
     /* доступ к полям / методам / кортежам */
-    | ExprWithoutBlock "." IntLiteral
+    | ExprWithoutBlock "." INTEGER_LITERAL
     | ExprWithoutBlock "." ID
     | ExprWithoutBlock "." ID "(" ExprListEmpty ")"
 
@@ -342,12 +339,24 @@ ExprWithoutBlock
     | PathCallExpr "(" ExprListEmpty ")"
 
     /* создание структуры */
-    | ExprWithoutBlock "{" StructExprFieldListEmpty "}"
+    | TypePath "{" StructExprFieldListEmpty "}"
 
     /* скобки и приведение типа */
     | "(" ExprWithBlock    ")"
     | "(" ExprWithoutBlock ")"
     | ExprWithoutBlock AS Type
+
+PathPrefix : SUPER
+           | CRATE
+           | SELF_VALUE
+           | PathPrefix "::" SUPER
+           ;
+
+TypePath : ID
+         | SELF_TYPE
+         | PathPrefix "::" ID
+         | TypePath "::" ID
+         ;
 
 PathCallExpr : ID
              | SUPER
@@ -397,7 +406,7 @@ SimpleIfExpr : IF ExprWithoutBlock BlockExpr
 
 /* TYPE */
 
-Type : PathCallExpr
+Type : TypePath
      | "[" Type ";" ExprWithBlock    "]"
      | "[" Type ";" ExprWithoutBlock "]"
 
