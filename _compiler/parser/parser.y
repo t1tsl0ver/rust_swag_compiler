@@ -169,14 +169,9 @@ EnumItemList : EnumItem
              | EnumItemList "," EnumItem
 
 EnumItem : ID
-         | Visibility ID
          | ID "=" ExprWithBlock
          | ID "=" ExprWithoutBlock
          | ID "=" StructExpr
-         | Visibility ID "=" ExprWithBlock
-         | Visibility ID "=" ExprWithoutBlock
-         | Visibility ID "=" StructExpr
-         | Visibility ID "{" StructFieldListEmpty "}"
          | ID "{" StructFieldListEmpty "}"
 
 /* IMPL */
