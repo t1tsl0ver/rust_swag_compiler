@@ -387,7 +387,9 @@ ExprWithBlock : BlockExpr
 
 BlockExpr : "{" StmtList "}"
           | "{" ExprNoStruct "}"
+          | "{" StructExpr "}"
           | "{" StmtList ExprNoStruct "}"
+          | "{" StmtList StructExpr "}"
           | "{" "}"
 
 LoopExpr : InfiniteLoopExpr
