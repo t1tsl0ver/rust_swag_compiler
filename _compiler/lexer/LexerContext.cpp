@@ -204,7 +204,7 @@ std::string LexerContext::withoutUnderscores(std::string_view text)
     return result;
 }
 
-int LexerContext::handleIntegerLiteral(TokenKind kind, int base, int prefixLength,
+int LexerContext::handleIntegerLiteral(int base, int prefixLength,
                                        const char* text, int length)
 {
     const std::string_view source(text, static_cast<std::size_t>(length));
@@ -218,7 +218,7 @@ int LexerContext::handleIntegerLiteral(TokenKind kind, int base, int prefixLengt
         reportError("integer literal is outside the supported range", source);
         return 0;
     }
-    return emitToken(kind, text, length, value);
+    return emitToken(TokenKind::INTEGER_LITERAL, text, length, value);
 }
 
 int LexerContext::handleFloatingLiteral(const char* text, int length)

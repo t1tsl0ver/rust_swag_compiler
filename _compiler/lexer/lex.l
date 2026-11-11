@@ -229,9 +229,9 @@ r#{IDENTIFIER}                    { return lexer.emitToken(TokenKind::RAW_IDENTI
                                       lexer.reportCurrentError("non-decimal integer literal may not be followed by a period", yytext, yyleng);
                                   }
 
-{BIN_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_BIN, 2, 2, yytext, yyleng); if (token != 0) return token; }
-{OCT_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_OCT, 8, 2, yytext, yyleng); if (token != 0) return token; }
-{HEX_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_HEX, 16, 2, yytext, yyleng); if (token != 0) return token; }
+{BIN_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(2, 2, yytext, yyleng); if (token != 0) return token; }
+{OCT_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(8, 2, yytext, yyleng); if (token != 0) return token; }
+{HEX_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(16, 2, yytext, yyleng); if (token != 0) return token; }
 
 0b{ID_CONT}*                      { lexer.reportCurrentError("invalid binary integer literal", yytext, yyleng); }
 0o{ID_CONT}*                      { lexer.reportCurrentError("invalid octal integer literal", yytext, yyleng); }
@@ -247,11 +247,11 @@ r#{IDENTIFIER}                    { return lexer.emitToken(TokenKind::RAW_IDENTI
                                       lexer.reportCurrentError("floating-point exponent has no digits", yytext, yyleng);
                                   }
 {DEC_NUMBER}\.{DEC_NUMBER}{SUFFIX}? { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
-{DEC_NUMBER}/\.\.               { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
-{DEC_NUMBER}/\.{ID_START}        { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}/\.\.               { const int token = lexer.handleIntegerLiteral(10, 0, yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}/\.{ID_START}        { const int token = lexer.handleIntegerLiteral(10, 0, yytext, yyleng); if (token != 0) return token; }
 {DEC_NUMBER}\.                   { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
 {DEC_NUMBER}(f32|f64)             { const int token = lexer.handleFloatingLiteral(yytext, yyleng); if (token != 0) return token; }
-{DEC_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(TokenKind::INTEGER_LITERAL_DEC, 10, 0, yytext, yyleng); if (token != 0) return token; }
+{DEC_NUMBER}{SUFFIX}?             { const int token = lexer.handleIntegerLiteral(10, 0, yytext, yyleng); if (token != 0) return token; }
 
  /* ЗОНА 13 Reserved prefixes и обычные идентификаторы */
 

@@ -40,8 +40,7 @@ public:
 
     void reportUnclosedAccumulated(std::string_view message);
     int handleCharacterLiteral(const char* text, int length);
-    int handleIntegerLiteral(TokenKind kind, int base, int prefixLength,
-                             const char* text, int length);
+    int handleIntegerLiteral(int base, int prefixLength, const char* text, int length);
     int handleFloatingLiteral(const char* text, int length);
 
 private:

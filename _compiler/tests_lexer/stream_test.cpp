@@ -31,6 +31,13 @@ static bool expectString(const Token& token, const std::string& expected)
     return value != nullptr && *value == expected;
 }
 
+static bool expectInteger(const Token& token, const std::string& spelling,
+                          unsigned long long expected)
+{
+    const auto* value = std::get_if<unsigned long long>(&token.value);
+    return token.spelling == spelling && value != nullptr && *value == expected;
+}
+
 static bool checkValid(const std::vector<Token>& tokens, const LexerContext& context)
 {
     const std::vector<Kind> expected = {
@@ -38,20 +45,28 @@ static bool checkValid(const std::vector<Token>& tokens, const LexerContext& con
         Kind::ID, Kind::RIGHT_PAREN, Kind::LEFT_BRACE,
         Kind::LET, Kind::ID, Kind::ASSIGN, Kind::RAW_STRING_LITERAL,
         Kind::SEMICOLON,
-        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL_HEX,
+        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL,
         Kind::SEMICOLON,
         Kind::LET, Kind::ID, Kind::ASSIGN, Kind::CHAR_LITERAL,
         Kind::SEMICOLON,
         Kind::ID, Kind::LEFT_PAREN, Kind::ID, Kind::RIGHT_PAREN,
+        Kind::SEMICOLON,
+        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL,
+        Kind::SEMICOLON,
+        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL,
+        Kind::SEMICOLON,
+        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL,
         Kind::SEMICOLON, Kind::RIGHT_BRACE
     };
     if (context.hasErrors() || !expectKinds(tokens, expected)) return false;
     if (!expectString(tokens[1], "demo") ||
         !expectString(tokens[11], "a\\n") ||
         tokens[11].spelling != "r##\"a\\n\"##" ||
-        tokens[16].spelling != "0x2Au8" ||
-        std::get<unsigned long long>(tokens[16].value) != 42ULL ||
-        !expectString(tokens[21], "\n")) {
+        !expectInteger(tokens[16], "0x2Au8", 42ULL) ||
+        !expectString(tokens[21], "\n") ||
+        !expectInteger(tokens[31], "0b101010u8", 42ULL) ||
+        !expectInteger(tokens[36], "0o52u8", 42ULL) ||
+        !expectInteger(tokens[41], "42u8", 42ULL)) {
         std::cerr << "a token has an incorrect value or spelling\n";
         return false;
     }
@@ -62,7 +77,7 @@ static bool checkErrors(const std::vector<Token>& tokens, const LexerContext& co
 {
     const std::vector<Kind> expected = {
         Kind::LET, Kind::ID, Kind::ASSIGN, Kind::SEMICOLON,
-        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL_DEC,
+        Kind::LET, Kind::ID, Kind::ASSIGN, Kind::INTEGER_LITERAL,
         Kind::SEMICOLON,
         Kind::LET, Kind::ID, Kind::ASSIGN, Kind::STRING_LITERAL,
         Kind::SEMICOLON
