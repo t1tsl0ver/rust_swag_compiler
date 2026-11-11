@@ -1,13 +1,13 @@
 /* ТОКЕНЫ */
 
 /* --- Ключевые слова --- */
-%token AS BREAK CONST CONTINUE CRATE ELSE ENUM FALSE FN FOR IF IMPL IN
-%token LET LOOP MOD MUT PUB RETURN SELF_VALUE STRUCT SUPER TRAIT TRUE WHILE
+%token AS BREAK CONST CONTINUE CRATE ELSE ENUM FN FOR IF IMPL IN
+%token LET LOOP MOD MUT PUB RETURN SELF_TYPE SELF_VALUE STRUCT SUPER TRAIT WHILE
 
 /* --- Идентификаторы и литералы --- */
 %token ID
-%token INTEGER_LITERAL_DEC INTEGER_LITERAL_BIN INTEGER_LITERAL_OCT INTEGER_LITERAL_HEX
-%token FLOAT_LITERAL STRING_LITERAL RAW_STRING_LITERAL CHAR_LITERAL
+%token INTEGER_LITERAL FLOAT_LITERAL BOOLEAN_LITERAL
+%token STRING_LITERAL RAW_STRING_LITERAL CHAR_LITERAL
 
 /* --- Пунктуация и операторы: символические имена + читаемые алиасы --- */
 %token LEFT_PAREN     "("
@@ -86,8 +86,11 @@ ItemListEmpty : /* empty */
 ItemList : Item
          | ItemList Item
 
-Item : SimpleItem
-     | Visibility SimpleItem
+/* [замечание 1] Visibility_opt объединяет пустой и Visibility варианты */
+Visibility_opt : /* empty */
+               | Visibility
+
+Item : Visibility_opt SimpleItem
 
 SimpleItem : FuncStmt
            | StructStmt
@@ -103,30 +106,40 @@ FuncStmt : DecFuncStmt
          | ImplFuncStmt
 
 DecFuncStmt : FN ID "(" FuncParamListEmpty ")" ";"
-            | FN ID "(" FuncParamListEmpty ")" "->" Type ";"
-            | FN ID "(" FuncParamListEmpty ")" "->" IMPL Type ";"
+            | FN ID "(" FuncParamListEmpty ")" "->" ReturnType ";"
 
 ImplFuncStmt : FN ID "(" FuncParamListEmpty ")" BlockExpr
-             | FN ID "(" FuncParamListEmpty ")" "->" Type BlockExpr
-             | FN ID "(" FuncParamListEmpty ")" "->" IMPL Type BlockExpr
+             | FN ID "(" FuncParamListEmpty ")" "->" ReturnType BlockExpr
+
+/* [замечание 1] ReturnType объединяет Type и IMPL Type */
+ReturnType : Type
+           | IMPL Type
 
 FuncParamListEmpty : /* empty */
                    | FuncParamList
 
-FuncParamList : SELF_VALUE
-              | "&" SELF_VALUE
-              | "&" MUT SELF_VALUE
+/* [замечание 1] self-параметры вынесены в SelfParam */
+FuncParamList : SelfParam
               | FuncParam
               | FuncParamList "," FuncParam
 
-FuncParam : ID ":" Type
-          | ID ":" IMPL Type
-          | MUT ID ":" Type
-          | MUT ID ":" IMPL Type
-          | ID ":" "&" MUT Type
-          | ID ":" "&" MUT IMPL Type
-          | ID ":" "&" Type
-          | ID ":" "&" IMPL Type
+SelfParam : SELF_VALUE
+          | "&" SELF_VALUE
+          | "&" MUT SELF_VALUE
+
+/* [замечание 1] FuncParam: выделены нетерминалы для модификаторов типа */
+FuncParam : MutOpt ID ":" ParamType
+
+MutOpt : /* empty */
+       | MUT
+
+/* [замечание 1] ParamType объединяет все варианты типов параметра */
+ParamType : ImplOpt Type
+          | "&" ImplOpt Type
+          | "&" MUT ImplOpt Type
+
+ImplOpt : /* empty */
+        | IMPL
 
 /* STRUCT */
 
@@ -143,8 +156,7 @@ StructFieldListEmpty : /* empty */
 StructFieldList : StructField
                 | StructFieldList "," StructField
 
-StructField : ID ":" Type
-            | Visibility ID ":" Type
+StructField : Visibility_opt ID ":" Type
 
 TupleStruct : STRUCT ID "(" TupleFieldListEmpty ")"
 
@@ -152,36 +164,30 @@ TupleFieldListEmpty : /* empty */
                     | TupleFieldList
                     | TupleFieldList ","
 
-TupleFieldList : Type
-               | Visibility Type
-               | TupleFieldList "," Type
-               | TupleFieldList "," Visibility Type
+TupleFieldList : TupleField
+               | TupleFieldList "," TupleField
+
+TupleField : Visibility_opt Type
 
 /* ENUM */
 
 EnumStmt : ENUM ID "{" EnumItemListEmpty "}"
 
 EnumItemListEmpty : /* empty */
-                  | ","
                   | EnumItemList
                   | EnumItemList ","
 
 EnumItemList : EnumItem
              | EnumItemList "," EnumItem
 
-EnumItem : ID
-         | Visibility ID
-         | ID "=" ExprWithBlock
-         | ID "=" ExprWithoutBlock
-         | Visibility ID "=" ExprWithBlock
-         | Visibility ID "=" ExprWithoutBlock
-         | Visibility ID "{" StructFieldListEmpty "}"
-         | ID "{" StructFieldListEmpty "}"
+EnumItem : Visibility_opt ID
+         | Visibility_opt ID "=" Expr
+         | Visibility_opt ID "{" StructFieldListEmpty "}"
 
 /* IMPL */
 
 ImplStmt : IMPL Type "{" AssociatedItemListEmpty "}"
-         | IMPL PathCallExpr FOR Type "{" AssociatedItemListEmpty "}"
+         | IMPL TypePath FOR Type "{" AssociatedItemListEmpty "}"
 
 AssociatedItemListEmpty : /* empty */
                         | AssociatedItemList
@@ -189,10 +195,8 @@ AssociatedItemListEmpty : /* empty */
 AssociatedItemList : AssociatedItem
                    | AssociatedItemList AssociatedItem
 
-AssociatedItem : FuncStmt
-              | ConstStmt
-              | Visibility FuncStmt
-              | Visibility ConstStmt
+AssociatedItem : Visibility_opt FuncStmt
+               | Visibility_opt ConstStmt
 
 /* TRAIT */
 
@@ -201,8 +205,7 @@ TraitStmt : TRAIT ID "{" AssociatedItemListEmpty "}"
 
 /* CONST */
 
-ConstStmt : CONST ID ":" Type "=" ExprWithBlock ";"
-          | CONST ID ":" Type "=" ExprWithoutBlock ";"
+ConstStmt : CONST ID ":" Type "=" Expr ";"
           | CONST ID ":" Type ";"
 
 /* MODULE */
@@ -211,16 +214,12 @@ ModuleStmt : MOD ID "{" ItemListEmpty "}"
 
 /* LET */
 
-LetStmt : LET ID "=" ExprWithBlock ";"
-        | LET ID "=" ExprWithoutBlock ";"
-        | LET ID ":" Type "=" ExprWithBlock ";"
-        | LET ID ":" Type "=" ExprWithoutBlock ";"
+LetStmt : LET ID           "=" Expr ";"
+        | LET ID ":" Type  "=" Expr ";"
+        | LET MUT ID           "=" Expr ";"
+        | LET MUT ID ":" Type  "=" Expr ";"
         | LET MUT ID ";"
-        | LET MUT ID ":" Type ";"
-        | LET MUT ID "=" ExprWithBlock ";"
-        | LET MUT ID "=" ExprWithoutBlock ";"
-        | LET MUT ID ":" Type "=" ExprWithBlock ";"
-        | LET MUT ID ":" Type "=" ExprWithoutBlock ";"
+        | LET MUT ID ":" Type  ";"
 
 /* EXPR STMT */
 
@@ -233,191 +232,164 @@ ExprListEmpty : /* empty */
               | ExprList ","
               | ExprList
 
-ExprList : ExprWithBlock
-         | ExprWithoutBlock
-         | ExprList "," ExprWithBlock
-         | ExprList "," ExprWithoutBlock
+ExprList : Expr
+         | ExprList "," Expr
 
-/* INT LITERAL */
+/* [замечание 2] Expr = ExprNoStruct | StructExpr — единый нетерминал для большинства мест */
+Expr : ExprNoStruct
+     | StructExpr
 
-IntLiteral : INTEGER_LITERAL_DEC
-           | INTEGER_LITERAL_BIN
-           | INTEGER_LITERAL_OCT
-           | INTEGER_LITERAL_HEX
+/* LITERALS */
+
+Literal : INTEGER_LITERAL
+        | FLOAT_LITERAL
+        | BOOLEAN_LITERAL
+        | STRING_LITERAL
+        | RAW_STRING_LITERAL
+        | CHAR_LITERAL
+        ;
 
 /* EXPRESSIONS */
 
-ExprWithoutBlock
-    : CHAR_LITERAL
-    | STRING_LITERAL
-    | RAW_STRING_LITERAL
-    | IntLiteral
-    | FLOAT_LITERAL
-    | TRUE
-    | FALSE
+/* [замечание 2] ExprWithoutBlock теперь краткий: ExprNoStruct или StructExpr */
+ExprWithoutBlock : ExprNoStruct
+                 | StructExpr
+
+/* [замечание 2] ExprNoStruct — основной большой нетерминал без struct-литерала */
+ExprNoStruct
+    : Literal
 
     /* арифметика */
-    | ExprWithoutBlock "+" ExprWithoutBlock
-    | ExprWithoutBlock "+" ExprWithBlock
-    | ExprWithBlock    "+" ExprWithoutBlock
-    | ExprWithBlock    "+" ExprWithBlock
-
-    | ExprWithoutBlock "-" ExprWithoutBlock
-    | ExprWithoutBlock "-" ExprWithBlock
-    | ExprWithBlock    "-" ExprWithoutBlock
-    | ExprWithBlock    "-" ExprWithBlock
-
-    | ExprWithoutBlock "/" ExprWithoutBlock
-    | ExprWithoutBlock "/" ExprWithBlock
-    | ExprWithBlock    "/" ExprWithoutBlock
-    | ExprWithBlock    "/" ExprWithBlock
-
-    | ExprWithoutBlock "*" ExprWithoutBlock
-    | ExprWithoutBlock "*" ExprWithBlock
-    | ExprWithBlock    "*" ExprWithoutBlock
-    | ExprWithBlock    "*" ExprWithBlock
-
-    | ExprWithoutBlock "%" ExprWithoutBlock
-    | ExprWithoutBlock "%" ExprWithBlock
-    | ExprWithBlock    "%" ExprWithoutBlock
-    | ExprWithBlock    "%" ExprWithBlock
+    | ExprNoStruct "+" ExprNoStruct
+    | ExprNoStruct "+" ExprWithBlock
+    | ExprNoStruct "-" ExprNoStruct
+    | ExprNoStruct "-" ExprWithBlock
+    | ExprNoStruct "/" ExprNoStruct
+    | ExprNoStruct "/" ExprWithBlock
+    | ExprNoStruct "*" ExprNoStruct
+    | ExprNoStruct "*" ExprWithBlock
+    | ExprNoStruct "%" ExprNoStruct
+    | ExprNoStruct "%" ExprWithBlock
 
     /* логика */
-    | ExprWithoutBlock "&&" ExprWithoutBlock
-    | ExprWithoutBlock "&&" ExprWithBlock
-    | ExprWithBlock    "&&" ExprWithoutBlock
-    | ExprWithBlock    "&&" ExprWithBlock
-
-    | ExprWithoutBlock "||" ExprWithoutBlock
-    | ExprWithoutBlock "||" ExprWithBlock
-    | ExprWithBlock    "||" ExprWithoutBlock
-    | ExprWithBlock    "||" ExprWithBlock
+    | ExprNoStruct "&&" ExprNoStruct
+    | ExprNoStruct "&&" ExprWithBlock
+    | ExprNoStruct "||" ExprNoStruct
+    | ExprNoStruct "||" ExprWithBlock
 
     /* присваивание */
-    | ExprWithoutBlock "=" ExprWithoutBlock
-    | ExprWithoutBlock "=" ExprWithBlock
-    | ExprWithBlock    "=" ExprWithoutBlock
-    | ExprWithBlock    "=" ExprWithBlock
+    | ExprNoStruct "=" ExprNoStruct
+    | ExprNoStruct "=" ExprWithBlock
 
     /* сравнения */
-    | ExprWithoutBlock "==" ExprWithoutBlock
-    | ExprWithoutBlock "==" ExprWithBlock
-    | ExprWithBlock    "==" ExprWithoutBlock
-    | ExprWithBlock    "==" ExprWithBlock
-
-    | ExprWithoutBlock "!=" ExprWithoutBlock
-    | ExprWithoutBlock "!=" ExprWithBlock
-    | ExprWithBlock    "!=" ExprWithoutBlock
-    | ExprWithBlock    "!=" ExprWithBlock
-
-    | ExprWithoutBlock ">" ExprWithoutBlock
-    | ExprWithoutBlock ">" ExprWithBlock
-    | ExprWithBlock    ">" ExprWithoutBlock
-    | ExprWithBlock    ">" ExprWithBlock
-
-    | ExprWithoutBlock "<" ExprWithoutBlock
-    | ExprWithoutBlock "<" ExprWithBlock
-    | ExprWithBlock    "<" ExprWithoutBlock
-    | ExprWithBlock    "<" ExprWithBlock
-
-    | ExprWithoutBlock ">=" ExprWithoutBlock
-    | ExprWithoutBlock ">=" ExprWithBlock
-    | ExprWithBlock    ">=" ExprWithoutBlock
-    | ExprWithBlock    ">=" ExprWithBlock
-
-    | ExprWithoutBlock "<=" ExprWithoutBlock
-    | ExprWithoutBlock "<=" ExprWithBlock
-    | ExprWithBlock    "<=" ExprWithoutBlock
-    | ExprWithBlock    "<=" ExprWithBlock
+    | ExprNoStruct "==" ExprNoStruct
+    | ExprNoStruct "==" ExprWithBlock
+    | ExprNoStruct "!=" ExprNoStruct
+    | ExprNoStruct "!=" ExprWithBlock
+    | ExprNoStruct ">" ExprNoStruct
+    | ExprNoStruct ">" ExprWithBlock
+    | ExprNoStruct "<" ExprNoStruct
+    | ExprNoStruct "<" ExprWithBlock
+    | ExprNoStruct ">=" ExprNoStruct
+    | ExprNoStruct ">=" ExprWithBlock
+    | ExprNoStruct "<=" ExprNoStruct
+    | ExprNoStruct "<=" ExprWithBlock
 
     /* унарные */
-    | "-" ExprWithoutBlock %prec UMINUS
+    | "-" ExprNoStruct %prec UMINUS
     | "-" ExprWithBlock    %prec UMINUS
-    | "!" ExprWithoutBlock
+    | "!" ExprNoStruct
     | "!" ExprWithBlock
-    | "*" ExprWithoutBlock %prec USTAR
+    | "*" ExprNoStruct %prec USTAR
     | "*" ExprWithBlock    %prec USTAR
-    | "&" ExprWithoutBlock
+    | "&" ExprNoStruct
     | "&" ExprWithBlock
-    | "&" MUT ExprWithoutBlock
+    | "&" MUT ExprNoStruct
     | "&" MUT ExprWithBlock
-    | ExprWithoutBlock "?"
-    | ExprWithBlock    "?"
+    | ExprNoStruct "?"
 
     /* массивы */
     | "[" ExprListEmpty "]"
-    | "[" ExprWithoutBlock ";" ExprWithoutBlock "]"
-    | "[" ExprWithoutBlock ";" ExprWithBlock    "]"
-    | "[" ExprWithBlock    ";" ExprWithoutBlock "]"
-    | "[" ExprWithBlock    ";" ExprWithBlock    "]"
+    | "[" ExprNoStruct ";" ExprNoStruct "]"
+    | "[" ExprNoStruct ";" ExprWithBlock "]"
+    | "[" ExprWithBlock ";" ExprNoStruct "]"
+    | "[" ExprWithBlock ";" ExprWithBlock "]"
 
     /* индексация */
-    | ExprWithoutBlock "[" ExprWithoutBlock "]"
-    | ExprWithoutBlock "[" ExprWithBlock    "]"
-    | ExprWithBlock    "[" ExprWithoutBlock "]"
-    | ExprWithBlock    "[" ExprWithBlock    "]"
+    | ExprNoStruct "[" ExprNoStruct "]"
+    | ExprNoStruct "[" ExprWithBlock "]"
 
     /* управление */
     | CONTINUE
     | BREAK
-    | BREAK ExprWithoutBlock
+    | BREAK ExprNoStruct
     | BREAK ExprWithBlock
     | RETURN
-    | RETURN ExprWithoutBlock
+    | RETURN ExprNoStruct
     | RETURN ExprWithBlock
 
     /* диапазоны */
     | ".."
-    | ".." ExprWithoutBlock
+    | ".." ExprNoStruct
     | ".." ExprWithBlock
-    | ExprWithoutBlock ".."
-    | ExprWithBlock    ".."
-    | ExprWithoutBlock ".." ExprWithoutBlock
-    | ExprWithoutBlock ".." ExprWithBlock
-    | ExprWithBlock    ".." ExprWithoutBlock
-    | ExprWithBlock    ".." ExprWithBlock
+    | ExprNoStruct ".."
+    | ExprNoStruct ".." ExprNoStruct
+    | ExprNoStruct ".." ExprWithBlock
 
     /* доступ к полям / методам / кортежам */
-    | ExprWithoutBlock "." IntLiteral
-    | ExprWithBlock    "." IntLiteral
-    | ExprWithoutBlock "." ID
-    | ExprWithBlock    "." ID
-    | ExprWithoutBlock "." ID "(" ExprListEmpty ")"
-    | ExprWithBlock    "." ID "(" ExprListEmpty ")"
+    | ExprNoStruct "." INTEGER_LITERAL
+    | ExprNoStruct "." ID
+    | ExprNoStruct "." ID "(" ExprListEmpty ")"
 
     /* пути и вызовы */
-    | PathCallExpr
-    | PathCallExpr "(" ExprListEmpty ")"
+    | Path
+    | Path "(" ExprListEmpty ")"
 
-    /* создание структуры */
-    | ExprWithoutBlock "{" StructExprFieldList "}"
+    /* скобки и приведение типа (внутри скобок — полный Expr) */
+    | "(" Expr ")"
+    | "(" ExprWithBlock ")"
+    | ExprNoStruct AS Type
+    ;
 
-    /* скобки и приведение типа */
-    | "(" ExprWithBlock    ")"
-    | "(" ExprWithoutBlock ")"
-    | ExprWithBlock    AS Type
-    | ExprWithoutBlock AS Type
+StructExpr : Path "{" StructExprFieldListEmpty "}"
+           ;
 
-PathCallExpr : ID
-             | SUPER
-             | SELF_VALUE
-             | CRATE
-             | PathCallExpr "::" ID
+PathPrefix : SUPER
+           | CRATE
+           | SELF_VALUE
+           | PathPrefix "::" SUPER
+           ;
+
+TypePath : ID
+         | SELF_TYPE
+         | PathPrefix "::" ID
+         | TypePath "::" ID
+         ;
+
+Path : TypePath
+     | SELF_VALUE
+     ;
+
+StructExprFieldListEmpty : /* empty */
+                         | StructExprFieldList
+                         | StructExprFieldList ","
 
 StructExprFieldList : StructExprField
-                    | "," StructExprField
                     | StructExprFieldList "," StructExprField
 
-StructExprField : ID ":" ExprWithoutBlock
+StructExprField : ID ":" ExprNoStruct
                 | ID ":" ExprWithBlock
+                | ID ":" StructExpr
 
 ExprWithBlock : BlockExpr
               | LoopExpr
               | IfExpr
 
 BlockExpr : "{" StmtList "}"
-          | "{" ExprWithoutBlock "}"
-          | "{" StmtList ExprWithoutBlock "}"
+          | "{" ExprNoStruct "}"
+          | "{" StructExpr "}"
+          | "{" StmtList ExprNoStruct "}"
+          | "{" StmtList StructExpr "}"
           | "{" "}"
 
 LoopExpr : InfiniteLoopExpr
@@ -426,26 +398,25 @@ LoopExpr : InfiniteLoopExpr
 
 InfiniteLoopExpr : LOOP BlockExpr
 
-PredicateLoopExpr : WHILE ExprWithBlock    BlockExpr
-                  | WHILE ExprWithoutBlock BlockExpr
+PredicateLoopExpr : WHILE ExprWithBlock BlockExpr
+                  | WHILE ExprNoStruct  BlockExpr
 
-IteratorLoopExpr : FOR ID IN ExprWithBlock    BlockExpr
-                 | FOR ID IN ExprWithoutBlock BlockExpr
+IteratorLoopExpr : FOR ID IN ExprWithBlock BlockExpr
+                 | FOR ID IN ExprNoStruct  BlockExpr
 
-IfExpr : SimpleIfElseExpr
-       | SimpleIfElseExpr ELSE BlockExpr
-
-SimpleIfElseExpr : SimpleIfExpr
-                 | SimpleIfElseExpr ELSE SimpleIfExpr
-
-SimpleIfExpr : IF ExprWithoutBlock BlockExpr
-             | IF ExprWithBlock    BlockExpr
+/* [замечание 3] Правая рекурсия: каждый else принадлежит ближайшему if */
+IfExpr : IF ExprNoStruct  BlockExpr
+       | IF ExprWithBlock BlockExpr
+       | IF ExprNoStruct  BlockExpr ELSE BlockExpr
+       | IF ExprNoStruct  BlockExpr ELSE IfExpr
+       | IF ExprWithBlock BlockExpr ELSE BlockExpr
+       | IF ExprWithBlock BlockExpr ELSE IfExpr
 
 /* TYPE */
 
-Type : PathCallExpr
-     | "[" Type ";" ExprWithBlock    "]"
-     | "[" Type ";" ExprWithoutBlock "]"
+Type : TypePath
+     | "[" Type ";" ExprNoStruct "]"
+     | "[" Type ";" ExprWithBlock "]"
 
 /* VISIBILITY */
 
