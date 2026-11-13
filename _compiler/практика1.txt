@@ -1,0 +1,57 @@
+int x, y;
+x = 7;
+x++;
+y = (x+9)*10;
+
+0   bipush 7
+2   istore 5
+4   iinc 5 + 1
+7   bipush 9
+9   iload 5
+11  iadd 
+12  bipush 10
+14  imul
+15  istore 6
+
+    2   3
+if (a < b) 
+    b*=-1;
+    else
+    a/=-1;
+
+0   iload 2
+2   iload 3
+4   if_icmpge +12
+7   iload 3
+9   iconst_m1
+10  imul
+11  istore 3
+13  goto +9
+
+16  iload 2
+18  iconst_m1
+19  idiv
+20  istore 2
+
+22
+
+      4     5
+int x[10], i;
+for (i = 0; i < 10; i++)
+    x[i] = 0;
+
+0   bipush 10
+2   newarray 10
+4   astore 4
+6   iconst_0
+7   istore 5
+9   goto +12
+12  aload 4
+14  iload 5
+16  iconst_0
+17  iastore
+18  iinc 5 1
+21  iload 5
+23  bipush 10
+25  if_cmplt -13
+28  
