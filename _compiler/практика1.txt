@@ -55,3 +55,26 @@ for (i = 0; i < 10; i++)
 23  bipush 10
 25  if_cmplt -13
 28  
+
+
+complex x(10, -1)
+complex y(0, 0)
+y._real = 10;
+x.add(y);
+return x._real;
+
+....
+20 | utf8 | complex
+21 | class | 20
+22 | utf8 | <init>
+23 | utf8 | (II) V
+24 | n&t  | 22, 23
+25 | mref | 21, 24
+26 | utf8 | _real
+27 | utf8 | I 
+28 | n&t | 26, 27
+29 | mref| 27, 28
+30 | utf8 | add
+31 | urf8 | (LComplex;) V
+32 | n&t | 30, 31
+33 | mref | 27, 32
