@@ -334,3 +334,9 @@ r#{IDENTIFIER}                    { return lexer.emitToken(TokenKind::RAW_IDENTI
 .                                 { lexer.reportCurrentError("unknown character", yytext, yyleng); }
 
 %%
+
+void lexerRestart(FILE* input)
+{
+    yyrestart(input);
+    BEGIN(INITIAL);
+}

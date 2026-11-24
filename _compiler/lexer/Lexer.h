@@ -4,10 +4,9 @@
 
 #include <cstdio>
 
-// Returns one token kind per call, or 0 at end of input. Valid token data is
-// available in context.token(); lexical errors are recorded in the context.
+// Возвращает код очередной лексемы или 0 в конце файла. Данные лексемы доступны
+// через context.token(). Лексические ошибки сохраняются в контексте.
 int yylex(LexerContext& context);
 
-// Flex input controls. The caller owns the FILE*.
-extern FILE* yyin;
-void yyrestart(FILE* input);
+// Начинает чтение нового файла и сбрасывает состояние Flex. Файл закрывает вызывающий код.
+void lexerRestart(FILE* input);

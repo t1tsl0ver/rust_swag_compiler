@@ -107,7 +107,7 @@ int main(int argc, char** argv)
     }
 
     LexerContext context(argv[2]);
-    yyrestart(input);
+    lexerRestart(input);
     std::vector<Token> tokens;
     int kind = 0;
     while ((kind = yylex(context)) != 0) {
