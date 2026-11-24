@@ -180,9 +180,10 @@ EnumItemListEmpty : /* empty */
 EnumItemList : EnumItem
              | EnumItemList "," EnumItem
 
-EnumItem : Visibility_opt ID
-         | Visibility_opt ID "=" Expr
-         | Visibility_opt ID "{" StructFieldListEmpty "}"
+
+EnumItem : ID
+         | ID "=" Expr
+         | ID "{" StructFieldListEmpty "}"
 
 /* IMPL */
 
