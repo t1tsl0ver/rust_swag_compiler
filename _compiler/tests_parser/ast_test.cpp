@@ -28,7 +28,7 @@ const ast::ExprPtr& statementExpression(const ast::Stmt& statement)
 
 std::string dotNodeId(const std::string& dot, const std::string& label)
 {
-    const auto labelPosition = dot.find(" [label=\"" + label + "\"];");
+    const auto labelPosition = dot.find(" [label=\"" + label + "\", shape=");
     check(labelPosition != std::string::npos, "DOT must display call and argument labels");
     const auto lineStart = dot.rfind("\n  n", labelPosition);
     check(lineStart != std::string::npos, "DOT node must have an ID");
@@ -192,6 +192,21 @@ int main(int argc, char** argv)
         const std::string dot = output.str();
         check(dot.find("digraph AST") == 0 && dot.find("label=\"tail\"") != std::string::npos &&
               dot.find("label=\"callee\"") != std::string::npos, "DOT must expose AST roles");
+        check(dot.find("style=filled") != std::string::npos, "DOT nodes must have a visible fill");
+        check(dot.find("label=\"Program\", shape=box, fillcolor=\"#cfe8ff\"") != std::string::npos &&
+              dot.find("label=\"let mut local: i32;\", shape=box, fillcolor=\"#d9f2d0\"") != std::string::npos &&
+              dot.find("label=\"i32\", shape=box, fillcolor=\"#ead9f5\"") != std::string::npos &&
+              dot.find("label=\"input > 0\", shape=ellipse, fillcolor=\"#fff2cc\"") != std::string::npos,
+              "DOT must distinguish structural nodes, statements, types and expressions");
+        check(dot.find("label=\"pkg::call\", shape=ellipse, fillcolor=\"#cff3ef\"") != std::string::npos &&
+              dot.find("label=\"1\", shape=ellipse, fillcolor=\"#ffdfa8\"") != std::string::npos &&
+              dot.find("label=\"1.5;\", shape=ellipse, fillcolor=\"#ffdfa8\"") != std::string::npos &&
+              dot.find("label=\"true\", shape=ellipse, fillcolor=\"#f9d6cf\"") != std::string::npos,
+              "DOT must distinguish paths, numbers and booleans");
+        check(dot.find("label=\"\\\"text\\\";\", shape=ellipse, fillcolor=\"#f4d7eb\"") != std::string::npos &&
+              dot.find("label=\"r#\\\"raw\\\"#;\", shape=ellipse, fillcolor=\"#f4d7eb\"") != std::string::npos &&
+              dot.find("label=\"'x';\", shape=ellipse, fillcolor=\"#f4d7eb\"") != std::string::npos,
+              "DOT must color strings, raw strings and characters");
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

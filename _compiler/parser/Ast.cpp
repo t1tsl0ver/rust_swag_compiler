@@ -372,6 +372,50 @@ std::string expressionText(const Expr& expression, int depth, int minimumPrecede
     return std::move(code.text);
 }
 
+struct DotNodeStyle {
+    std::string_view shape;
+    std::string_view fillColor;
+};
+
+constexpr DotNodeStyle structureStyle{"box", "#cfe8ff"};
+constexpr DotNodeStyle statementStyle{"box", "#d9f2d0"};
+constexpr DotNodeStyle typeStyle{"box", "#ead9f5"};
+constexpr DotNodeStyle expressionStyle{"ellipse", "#fff2cc"};
+
+template <typename ExprKind>
+DotNodeStyle styleForExpression(const ExprKind&)
+{
+    return expressionStyle;
+}
+
+DotNodeStyle styleForExpression(const BlockExpr&)
+{
+    return structureStyle;
+}
+
+DotNodeStyle styleForExpression(const PathExpr&)
+{
+    return {"ellipse", "#cff3ef"};
+}
+
+DotNodeStyle styleForExpression(const LiteralExpr& literal)
+{
+    switch (literal.token.kind) {
+    case TokenKind::INTEGER_LITERAL:
+    case TokenKind::FLOAT_LITERAL:
+        return {"ellipse", "#ffdfa8"};
+    case TokenKind::STRING_LITERAL:
+    case TokenKind::RAW_STRING_LITERAL:
+    case TokenKind::CHAR_LITERAL:
+        return {"ellipse", "#f4d7eb"};
+    case TokenKind::TRUE:
+    case TokenKind::FALSE:
+        return {"ellipse", "#f9d6cf"};
+    default:
+        return expressionStyle;
+    }
+}
+
 class DotWriter {
 public:
     explicit DotWriter(std::ostream& stream) : output(stream) {}
@@ -379,8 +423,8 @@ public:
     void program(const Program& program)
     {
         output << "digraph AST {\n"
-               << "  node [fontname=\"monospace\"];\n";
-        const Id id = node("Program");
+               << "  node [fontname=\"monospace\", style=filled];\n";
+        const Id id = node("Program", structureStyle);
         children(id, program.items, "item");
         std::reverse(pending.begin(), pending.end());
         while (!pending.empty()) {
@@ -441,13 +485,14 @@ private:
         pending.insert(first, Link{child.parent, id, child.role, child.position});
     }
 
-    Id node(std::string_view label)
+    Id node(std::string_view label, DotNodeStyle style)
     {
         constexpr std::size_t labelLimit = 110;
         const bool shortened = label.size() > labelLimit;
         const Id id = nextId++;
         output << "  n" << id << " [label=\"" << escapeDot(label.substr(0, shortened ? labelLimit - 3 : labelLimit))
-               << (shortened ? "..." : "") << "\"];\n";
+               << (shortened ? "..." : "") << "\", shape=" << style.shape
+               << ", fillcolor=\"" << style.fillColor << "\"];\n";
         return id;
     }
 
@@ -498,7 +543,7 @@ private:
 
     Id emitBlock(const Block& block)
     {
-        const Id id = node(blockText(block));
+        const Id id = node(blockText(block), structureStyle);
         blockChildren(id, block);
         return id;
     }
@@ -529,7 +574,7 @@ private:
         if (!function.body) {
             signature += ';';
         }
-        const Id id = node(signature);
+        const Id id = node(signature, structureStyle);
         numberedChildren(id, function.parameters, "parameter");
         child(id, function.returnType, "return type");
         child(id, function.body, "body");
@@ -542,7 +587,7 @@ private:
         if (constant.initializer) {
             label += " = " + expressionText(constant.initializer);
         }
-        const Id id = node(label + ";");
+        const Id id = node(label + ";", structureStyle);
         child(id, constant.type, "type");
         child(id, constant.initializer, "initializer");
         return id;
@@ -550,21 +595,21 @@ private:
 
     Id emitModule(const Module& module, Visibility visibility)
     {
-        const Id id = node(visibilityText(visibility) + "mod " + nameText(module.name));
+        const Id id = node(visibilityText(visibility) + "mod " + nameText(module.name), structureStyle);
         children(id, module.items, "item");
         return id;
     }
 
     Id emitStruct(const Struct& structure, Visibility visibility)
     {
-        const Id id = node(visibilityText(visibility) + "struct " + nameText(structure.name));
+        const Id id = node(visibilityText(visibility) + "struct " + nameText(structure.name), structureStyle);
         child(id, structure.fields, "fields");
         return id;
     }
 
     Id emitEnum(const Enum& enumeration, Visibility visibility)
     {
-        const Id id = node(visibilityText(visibility) + "enum " + nameText(enumeration.name));
+        const Id id = node(visibilityText(visibility) + "enum " + nameText(enumeration.name), structureStyle);
         children(id, enumeration.variants, "variant");
         return id;
     }
@@ -576,9 +621,9 @@ private:
         if (trait.supertrait) {
             label += ": " + supertrait;
         }
-        const Id id = node(label);
+        const Id id = node(label, structureStyle);
         if (trait.supertrait) {
-            edge(id, node(supertrait), "supertrait");
+            edge(id, node(supertrait, typeStyle), "supertrait");
         }
         children(id, trait.items, "associated item");
         return id;
@@ -591,9 +636,9 @@ private:
         if (implementation.trait) {
             label += trait + " for ";
         }
-        const Id id = node(label + typeText(implementation.target));
+        const Id id = node(label + typeText(implementation.target), structureStyle);
         if (implementation.trait) {
-            edge(id, node(trait), "trait");
+            edge(id, node(trait, typeStyle), "trait");
         }
         child(id, implementation.target, "target");
         children(id, implementation.items, "associated item");
@@ -606,7 +651,7 @@ private:
         if (variant.discriminant) {
             label += " = " + expressionText(variant.discriminant);
         }
-        const Id id = node(label);
+        const Id id = node(label, structureStyle);
         child(id, variant.fields, "fields");
         child(id, variant.discriminant, "discriminant");
         return id;
@@ -615,7 +660,7 @@ private:
     Id emitFields(const Fields& fields)
     {
         return std::visit(Overloaded{
-            [this](UnitFields) { return node("Unit"); },
+            [this](UnitFields) { return node("Unit", structureStyle); },
             [this](const NamedFields& value) { return emitFieldList(value, "Named fields"); },
             [this](const TupleFields& value) { return emitFieldList(value, "Tuple fields"); },
         }, fields);
@@ -624,21 +669,22 @@ private:
     template <typename List>
     Id emitFieldList(const List& fields, std::string_view label)
     {
-        const Id id = node(label);
+        const Id id = node(label, structureStyle);
         children(id, fields, "field");
         return id;
     }
 
     Id emitNamedField(const NamedField& field)
     {
-        const Id id = node(visibilityText(field.visibility) + nameText(field.name) + ": " + typeText(field.type));
+        const Id id = node(visibilityText(field.visibility) + nameText(field.name) + ": " + typeText(field.type),
+                           structureStyle);
         child(id, field.type, "type");
         return id;
     }
 
     Id emitTupleField(const TupleField& field)
     {
-        const Id id = node(visibilityText(field.visibility) + typeText(field.type));
+        const Id id = node(visibilityText(field.visibility) + typeText(field.type), structureStyle);
         child(id, field.type, "type");
         return id;
     }
@@ -646,9 +692,9 @@ private:
     Id emitParameter(const Param& parameter)
     {
         return std::visit(Overloaded{
-            [this](Receiver value) { return node(parameterText(value)); },
+            [this](Receiver value) { return node(parameterText(value), structureStyle); },
             [this](const NamedParam& value) {
-                const Id id = node(parameterText(value));
+                const Id id = node(parameterText(value), structureStyle);
                 child(id, value.type, "type");
                 return id;
             },
@@ -658,7 +704,7 @@ private:
     Id emitType(const Type& type)
     {
         return std::visit([this](const auto& kind) {
-            const Id id = node(typeCode(kind, previewDepth - 1));
+            const Id id = node(typeCode(kind, previewDepth - 1), typeStyle);
             typeChildren(id, kind);
             return id;
         }, type.kind);
@@ -685,7 +731,7 @@ private:
     Id emitStatement(const Stmt& statement)
     {
         return std::visit(Overloaded{
-            [this](EmptyStmt) { return node(";"); },
+            [this](EmptyStmt) { return node(";", statementStyle); },
             [this](const LetStmt& value) { return emitLet(value); },
             [this](const ExprStmt& value) { return emitExpression(*value.expression, value.hasSemicolon ? ";" : ""); },
             [this](const ItemStmt& value) { return emitItem(*value.item); },
@@ -702,7 +748,7 @@ private:
         if (statement.initializer) {
             label += " = " + expressionText(statement.initializer);
         }
-        const Id id = node(label + ";");
+        const Id id = node(label + ";", statementStyle);
         child(id, statement.type, "type");
         child(id, statement.initializer, "initializer");
         return id;
@@ -713,7 +759,7 @@ private:
         return std::visit([&](const auto& kind) {
             auto label = expressionCode(kind, previewDepth - 1).text;
             label += suffix;
-            const Id id = node(label);
+            const Id id = node(label, styleForExpression(kind));
             expressionChildren(id, kind);
             return id;
         }, expression.kind);
@@ -806,7 +852,7 @@ private:
 
     Id emitStructField(const StructFieldValue& field)
     {
-        const Id id = node(structFieldText(field, previewDepth));
+        const Id id = node(structFieldText(field, previewDepth), structureStyle);
         child(id, field.value, "value");
         return id;
     }

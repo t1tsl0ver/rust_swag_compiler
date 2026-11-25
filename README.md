@@ -40,11 +40,14 @@ ctest --test-dir build -C Debug --output-on-failure
 
 Действия в `_compiler/parser/parser.y` сразу строят AST. Bison генерирует функцию `yyparse()` и хранит значения грамматики в `%union`. Функция `syntax::parseFile` возвращает корень `ast::Program` при успешном разборе. Узлы AST определены в `_compiler/parser/Ast.h`. Блок хранит список операторов и опциональное завершающее выражение. У вызова есть вызываемое выражение и список аргументов в порядке исходника.
 
-Чтобы вывести AST в файл Graphviz DOT:
+Для просмотра цветного AST выгрузите файл DOT и преобразуйте его в SVG с помощью Graphviz.
 
 ```powershell
-.\build\parser_tree.exe .\_compiler\tests_parser\nested_control_flow.rs | Set-Content -Encoding ascii .\build\nested_control_flow.txt
+.\build\parser_tree.exe .\_compiler\tests_parser\nested_control_flow.rs | Set-Content -Encoding ascii .\build\nested_control_flow.dot
+dot -Tsvg .\build\nested_control_flow.dot -o .\build\nested_control_flow.svg
 ```
+
+Голубым выделены объявления, блоки и другие структурные узлы, зелёным — объявления переменных и пустые инструкции, сиреневым — типы. Жёлтым отмечены составные выражения, бирюзовым — пути и отдельные идентификаторы, оранжевым — числа, розовым — строки и символы, коралловым — `true` и `false`.
 
 Имена примитивных типов (`i32`, `bool`, `str` и другие), `String` и контекстно-зависимые слова (`union`, `raw`, `safe`, `macro_rules`) выдаются как `ID`. Лексер не решает по контексту, является ли идентификатор именем типа, структуры, функции или переменной — это задача синтаксического анализатора. В учебном подмножестве идентификаторы ограничены ASCII: `[a-zA-Z_][a-zA-Z0-9_]*`.
 

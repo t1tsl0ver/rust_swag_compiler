@@ -32,4 +32,11 @@ pub mod sample {
         Named { value: value };
         if true { value } else { 0 }
     }
+
+    fn literal_sample() {
+        1.5;
+        "text";
+        r#"raw"#;
+        'x';
+    }
 }
