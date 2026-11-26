@@ -155,26 +155,69 @@ void checkNestedControlFlow(const ast::Program& program)
           "DOT must show normalize as the second argument of matches_pair");
 }
 
+void checkDeepControlFlow(const ast::Program& program)
+{
+    check(program.items.size() == 1, "deep nesting must be inside one function");
+    const auto& main = as<ast::Function>(program.items.at(0));
+    check(main.name.text == "main" && main.body, "deep nesting main function");
+
+    const auto& rows = as<ast::ForExpr>(statementExpression(main.body->statements.at(1)));
+    const auto& smallRow = as<ast::IfExpr>(rows.body->tail);
+    const auto& columns = as<ast::WhileExpr>(smallRow.thenBlock->tail);
+    const auto& evenPair = as<ast::IfExpr>(columns.body->tail);
+    const auto& layers = as<ast::ForExpr>(evenPair.thenBlock->tail);
+    const auto& secondLayer = as<ast::IfExpr>(layers.body->tail);
+    const auto& scan = as<ast::LoopExpr>(secondLayer.thenBlock->tail);
+    const auto& positiveColumn = as<ast::IfExpr>(statementExpression(scan.body->statements.at(0)));
+    const auto& steps = as<ast::ForExpr>(positiveColumn.thenBlock->tail);
+    const auto& matchingStep = as<ast::IfExpr>(steps.body->tail);
+
+    const auto& increment = as<ast::AssignExpr>(statementExpression(matchingStep.thenBlock->statements.at(0)));
+    const auto& addition = as<ast::BinaryExpr>(increment.value);
+    check(as<ast::PathExpr>(increment.target).path.at(0).text == "hits" &&
+              addition.op == ast::BinaryOp::Add && as<ast::LiteralExpr>(addition.right).token.spelling == "1",
+          "increment hits at control-flow depth ten");
+    as<ast::BreakExpr>(statementExpression(scan.body->statements.at(1)));
+    as<ast::IfExpr>(main.body->tail);
+}
+
+void checkSyntaxError(const char* path)
+{
+    const auto invalid = syntax::parseFile(path);
+    check(!invalid && !invalid.tree && invalid.lexerErrors == 0 && invalid.error.find("syntax error") == 0,
+          "syntax error must reject the AST without a lexical error");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
 {
-    if (argc != 2 && argc != 4) {
+    if (argc < 2 || argc > 4) {
+        return 2;
+    }
+    const std::string mode = argc == 3 ? argv[1] : "";
+    if (argc == 3 && mode != "--deep-control-flow" && mode != "--reject-syntax") {
         return 2;
     }
     try {
+        if (mode == "--reject-syntax") {
+            checkSyntaxError(argv[2]);
+            return 0;
+        }
         if (argc == 4) {
-            const auto invalid = syntax::parseFile(argv[2]);
-            check(!invalid && !invalid.tree && !invalid.error.empty() && invalid.lexerErrors == 0,
-                  "syntax error must reject the AST");
+            checkSyntaxError(argv[2]);
             const auto lexicalError = syntax::parseFile(argv[3]);
             check(!lexicalError && !lexicalError.tree && lexicalError.lexerErrors > 0,
                   "lexical error must reject the AST");
         }
 
-        const auto result = syntax::parseFile(argv[1]);
+        const auto result = syntax::parseFile(argc == 3 ? argv[2] : argv[1]);
         if (!result) {
             throw std::runtime_error(result.error);
+        }
+        if (mode == "--deep-control-flow") {
+            checkDeepControlFlow(*result.tree);
+            return 0;
         }
         if (argc == 2) {
             checkNestedControlFlow(*result.tree);

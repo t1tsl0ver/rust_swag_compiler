@@ -78,4 +78,16 @@ if(BUILD_TESTING)
     add_test(NAME parser.nested_control_flow
         COMMAND parser_ast_test
                 "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_parser/nested_control_flow.rs")
+    add_test(NAME parser.deep_nesting
+        COMMAND parser_ast_test --deep-control-flow
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_parser/deep_nesting.rs")
+    add_test(NAME parser.struct_and_enum
+        COMMAND parser_tree
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_parser/struct_and_enum.rs")
+    add_test(NAME parser.arrays_and_blocks
+        COMMAND parser_tree
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_parser/arrays_and_blocks.rs")
+    add_test(NAME parser.missing_argument_comma
+        COMMAND parser_ast_test --reject-syntax
+                "${CMAKE_CURRENT_SOURCE_DIR}/_compiler/tests_parser/missing_argument_comma.rs")
 endif()
